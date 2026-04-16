@@ -90,11 +90,24 @@
   <!-- Remoties al fondo del sidebar -->
   <div class="sidebar-footer">
     {% if remoties_exists %}
-      <img src="{{ url_for('static', filename='images/remoties.png') }}" alt="Remoties" style="width:36px;margin-bottom:6px;display:block;margin-left:auto;margin-right:auto;opacity:.85;">
+      <img src="{{ url_for('static', filename='images/remoties.png') }}" alt="Remoties" style="width:36px;margin-bottom:8px;display:block;margin-left:auto;margin-right:auto;opacity:.85;">
     {% else %}
-      <span style="font-size:24px;display:block;text-align:center;margin-bottom:4px;">😄</span>
+      <span style="font-size:24px;display:block;text-align:center;margin-bottom:6px;">😄</span>
     {% endif %}
-    Inventario 2026 &copy; RTS
+
+    <div style="font-size:10px;color:rgba(255,255,255,.45);line-height:1.6;text-align:center;">
+      &copy; 2026 Remote Team Solutions.<br>
+      All rights reserved.<br>
+      <a href="https://remoteteamsolutions.com/privacy-policy/"
+         target="_blank" rel="noopener"
+         style="color:rgba(110,193,228,.8);text-decoration:underline;text-underline-offset:2px;">
+        Privacy Policy
+      </a>
+    </div>
+
+    <div style="margin-top:7px;font-size:10px;color:rgba(255,255,255,.28);text-align:center;font-style:italic;line-height:1.5;">
+      Developed by the IT Team
+    </div>
   </div>
 </nav>
 

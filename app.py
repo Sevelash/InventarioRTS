@@ -86,35 +86,23 @@ def dashboard():
     categories  = Category.query.all()
     cat_stats   = [{'name': c.name, 'count': len(c.assets)} for c in categories]
 
-    # ── Gráfica: últimos 12 meses ─────────────────────────────────────────────
-    MESES_ES = ['Ene','Feb','Mar','Abr','May','Jun',
-                'Jul','Ago','Sep','Oct','Nov','Dic']
-    today_d = date.today()
+    # ── Gráfica: datos raw (dicts por mes) para todas las fechas ─────────────
+    # 4 queries totales — el JS resuelve cualquier rango/categoría client-side
 
-    # Lista de (año, mes) de los últimos 12 meses
-    chart_months = []
-    base = today_d.year * 12 + today_d.month - 1
-    for i in range(11, -1, -1):
-        idx = base - i
-        chart_months.append((idx // 12, idx % 12 + 1))
+    cats_for_chart = Category.query.order_by(Category.name).all()
 
-    chart_labels = [f"{MESES_ES[m-1]} {y}" for y, m in chart_months]
+    # 1) Adquisiciones por (category_id, YYYY-MM)
+    acq_raw = db.session.query(
+        Asset.category_id,
+        db.func.strftime('%Y-%m', Asset.created_at),
+        db.func.count(Asset.id)
+    ).group_by(Asset.category_id,
+               db.func.strftime('%Y-%m', Asset.created_at)).all()
 
-    def _series(rows):
-        """Dict {YYYY-MM: count} from a query result."""
-        return {k: v for k, v in rows if k}
-
-    def _fill(d):
-        """Fill 12-month array from dict."""
-        return [d.get(f'{y}-{m:02d}', 0) for y, m in chart_months]
-
-    # ── Global (todas las categorías) ────────────────────────────────────────
-    acq_global = _series(db.session.query(
-        db.func.strftime('%Y-%m', Asset.created_at), db.func.count(Asset.id)
-    ).group_by(db.func.strftime('%Y-%m', Asset.created_at)).all())
-
-    baja_global = _series(db.session.query(
-        db.func.strftime('%Y-%m', AuditLog.created_at), db.func.count(AuditLog.id)
+    # 2) Bajas globales del audit log por YYYY-MM
+    baja_raw = db.session.query(
+        db.func.strftime('%Y-%m', AuditLog.created_at),
+        db.func.count(AuditLog.id)
     ).filter(
         AuditLog.entity_type == 'asset',
         db.or_(
@@ -123,46 +111,58 @@ def dashboard():
                     db.or_(AuditLog.details.ilike('%→ retired%'),
                            AuditLog.details.ilike('%→ disposed%')))
         )
-    ).group_by(db.func.strftime('%Y-%m', AuditLog.created_at)).all())
+    ).group_by(db.func.strftime('%Y-%m', AuditLog.created_at)).all()
 
-    reas_global = _series(db.session.query(
-        db.func.strftime('%Y-%m', Assignment.created_at), db.func.count(Assignment.id)
-    ).group_by(db.func.strftime('%Y-%m', Assignment.created_at)).all())
+    # 3) Bajas por categoría (activos retired/disposed, fecha updated_at)
+    baja_cat_raw = db.session.query(
+        Asset.category_id,
+        db.func.strftime('%Y-%m', Asset.updated_at),
+        db.func.count(Asset.id)
+    ).filter(Asset.status.in_(['retired', 'disposed'])
+    ).group_by(Asset.category_id,
+               db.func.strftime('%Y-%m', Asset.updated_at)).all()
 
-    # ── Por categoría ────────────────────────────────────────────────────────
-    cats_for_chart = Category.query.order_by(Category.name).all()
-    cat_chart_data = {
-        'all': {
-            'name': 'Todas las categorías',
-            'adquisiciones':  _fill(acq_global),
-            'bajas':          _fill(baja_global),
-            'reasignaciones': _fill(reas_global),
-        }
+    # 4) Reasignaciones por (category_id, YYYY-MM)
+    reas_raw = db.session.query(
+        Asset.category_id,
+        db.func.strftime('%Y-%m', Assignment.created_at),
+        db.func.count(Assignment.id)
+    ).join(Asset, Assignment.asset_id == Asset.id
+    ).group_by(Asset.category_id,
+               db.func.strftime('%Y-%m', Assignment.created_at)).all()
+
+    # ── Construir estructura de dicts raw por categoría ───────────────────────
+    cat_chart_raw = {
+        'all': {'adquisiciones': {}, 'bajas': {}, 'reasignaciones': {}}
     }
     for cat in cats_for_chart:
-        cat_acq = _series(db.session.query(
-            db.func.strftime('%Y-%m', Asset.created_at), db.func.count(Asset.id)
-        ).filter(Asset.category_id == cat.id
-        ).group_by(db.func.strftime('%Y-%m', Asset.created_at)).all())
+        cat_chart_raw[str(cat.id)] = {'adquisiciones': {}, 'bajas': {}, 'reasignaciones': {}}
 
-        cat_baja = _series(db.session.query(
-            db.func.strftime('%Y-%m', Asset.updated_at), db.func.count(Asset.id)
-        ).filter(Asset.category_id == cat.id,
-                 Asset.status.in_(['retired', 'disposed'])
-        ).group_by(db.func.strftime('%Y-%m', Asset.updated_at)).all())
+    for cat_id, ym, cnt in acq_raw:
+        if not ym:
+            continue
+        cat_chart_raw['all']['adquisiciones'][ym] = \
+            cat_chart_raw['all']['adquisiciones'].get(ym, 0) + cnt
+        if cat_id and str(cat_id) in cat_chart_raw:
+            cat_chart_raw[str(cat_id)]['adquisiciones'][ym] = cnt
 
-        cat_reas = _series(db.session.query(
-            db.func.strftime('%Y-%m', Assignment.created_at), db.func.count(Assignment.id)
-        ).join(Asset, Assignment.asset_id == Asset.id
-        ).filter(Asset.category_id == cat.id
-        ).group_by(db.func.strftime('%Y-%m', Assignment.created_at)).all())
+    for ym, cnt in baja_raw:
+        if ym:
+            cat_chart_raw['all']['bajas'][ym] = cnt
 
-        cat_chart_data[str(cat.id)] = {
-            'name':           cat.name,
-            'adquisiciones':  _fill(cat_acq),
-            'bajas':          _fill(cat_baja),
-            'reasignaciones': _fill(cat_reas),
-        }
+    for cat_id, ym, cnt in baja_cat_raw:
+        if ym and cat_id and str(cat_id) in cat_chart_raw:
+            cat_chart_raw[str(cat_id)]['bajas'][ym] = cnt
+
+    for cat_id, ym, cnt in reas_raw:
+        if not ym:
+            continue
+        cat_chart_raw['all']['reasignaciones'][ym] = \
+            cat_chart_raw['all']['reasignaciones'].get(ym, 0) + cnt
+        if cat_id and str(cat_id) in cat_chart_raw:
+            cat_chart_raw[str(cat_id)]['reasignaciones'][ym] = cnt
+
+    chart_start_year = 2020
 
     return render_template('dashboard.html',
                            total_assets=total_assets, available=available,
@@ -172,9 +172,10 @@ def dashboard():
                            recent_assignments=recent_assignments,
                            recent_shipments=recent_shipments,
                            cat_stats=cat_stats,
-                           chart_labels=chart_labels,
-                           cat_chart_data=cat_chart_data,
-                           cats_for_chart=cats_for_chart)
+                           cat_chart_raw=cat_chart_raw,
+                           cats_for_chart=cats_for_chart,
+                           chart_start_year=chart_start_year,
+                           chart_current_year=date.today().year)
 
 
 # ── Assets ────────────────────────────────────────────────────────────────────
