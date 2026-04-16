@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Branding — Admin RTS{% endblock %}
+{% block page_title %}Branding & Apariencia{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('admin.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Volver al Panel
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+
+    <form method="post" enctype="multipart/form-data">
+
+      <!-- Logo principal -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-image me-2"></i>Logo Principal</div>
+        <div class="card-body">
+          <div class="row g-3 align-items-center">
+            <div class="col-sm-4 text-center">
+              {% if files['logo.png'].exists %}
+                <img src="{{ url_for('static', filename='images/logo.png') }}?t={{ files['logo.png'].mtime|int }}"
+                     alt="Logo actual" style="max-height:80px;max-width:160px;object-fit:contain;"
+                     class="mb-2 d-block mx-auto">
+                <div style="font-size:11px;color:var(--rts-gray);">{{ files['logo.png'].size }}</div>
+              {% else %}
+                <div class="text-muted py-3" style="font-size:13px;">
+                  <i class="bi bi-image d-block mb-1" style="font-size:2rem;opacity:.3;"></i>
+                  Sin logo cargado
+                </div>
+              {% endif %}
+            </div>
+            <div class="col-sm-8">
+              <label class="form-label">Subir nuevo logo <span style="color:var(--rts-gray);font-weight:400;">(PNG, SVG, WEBP recomendado)</span></label>
+              <input type="file" name="logo" class="form-control" accept="image/*">
+              <div class="form-text">Se guardará como <code>logo.png</code> y se mostrará en el sidebar.</div>
+              {% if files['logo.png'].exists %}
+              <div class="mt-2">
+                <label class="form-check-label text-danger" style="font-size:12.5px;cursor:pointer;">
+                  <input type="checkbox" name="delete_logo" class="form-check-input me-1">
+                  Eliminar logo actual
+                </label>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Remoties -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-emoji-smile me-2"></i>Emoji Remoties (Sidebar)</div>
+        <div class="card-body">
+          <div class="row g-3 align-items-center">
+            <div class="col-sm-4 text-center">
+              {% if files['remoties.png'].exists %}
+                <img src="{{ url_for('static', filename='images/remoties.png') }}?t={{ files['remoties.png'].mtime|int }}"
+                     alt="Remoties" style="max-height:80px;max-width:100px;object-fit:contain;"
+                     class="mb-2 d-block mx-auto">
+                <div style="font-size:11px;color:var(--rts-gray);">{{ files['remoties.png'].size }}</div>
+              {% else %}
+                <div class="text-muted py-3" style="font-size:13px;">
+                  <i class="bi bi-emoji-smile d-block mb-1" style="font-size:2rem;opacity:.3;"></i>
+                  Sin imagen cargada
+                </div>
+              {% endif %}
+            </div>
+            <div class="col-sm-8">
+              <label class="form-label">Subir imagen Remoties</label>
+              <input type="file" name="remoties" class="form-control" accept="image/*">
+              <div class="form-text">Aparece en la parte inferior del sidebar. Recomendado: cuadrada, fondo transparente.</div>
+              {% if files['remoties.png'].exists %}
+              <div class="mt-2">
+                <label class="form-check-label text-danger" style="font-size:12.5px;cursor:pointer;">
+                  <input type="checkbox" name="delete_remoties" class="form-check-input me-1">
+                  Eliminar imagen actual
+                </label>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Favicon -->
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-browser-chrome me-2"></i>Favicon (Pestaña del Navegador)</div>
+        <div class="card-body">
+          <div class="row g-3 align-items-center">
+            <div class="col-sm-4 text-center">
+              {% if files['favicon.png'].exists %}
+                <img src="{{ url_for('static', filename='images/favicon.png') }}?t={{ files['favicon.png'].mtime|int }}"
+                     alt="Favicon" style="max-height:48px;max-width:48px;object-fit:contain;"
+                     class="mb-2 d-block mx-auto">
+                <div style="font-size:11px;color:var(--rts-gray);">{{ files['favicon.png'].size }}</div>
+              {% else %}
+                <div class="text-muted py-3" style="font-size:13px;">
+                  <i class="bi bi-browser-chrome d-block mb-1" style="font-size:2rem;opacity:.3;"></i>
+                  Sin favicon cargado
+                </div>
+              {% endif %}
+            </div>
+            <div class="col-sm-8">
+              <label class="form-label">Subir favicon <span style="color:var(--rts-gray);font-weight:400;">(PNG, ICO — idealmente 32×32 o 64×64 px)</span></label>
+              <input type="file" name="favicon" class="form-control" accept="image/*">
+              <div class="form-text">Se muestra en la pestaña del navegador.</div>
+              {% if files['favicon.png'].exists %}
+              <div class="mt-2">
+                <label class="form-check-label text-danger" style="font-size:12.5px;cursor:pointer;">
+                  <input type="checkbox" name="delete_favicon" class="form-check-input me-1">
+                  Eliminar favicon actual
+                </label>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-rts px-4">
+          <i class="bi bi-cloud-upload me-1"></i>Guardar Cambios
+        </button>
+        <a href="{{ url_for('admin.index') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>Cancelar
+        </a>
+      </div>
+
+    </form>
+
+  </div>
+</div>
+{% endblock %}

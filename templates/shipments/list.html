@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Envíos DHL - RTS Asset Management{% endblock %}
+{% block page_title %}Envíos & Trazabilidad{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('shipment_new') }}" class="btn btn-navy btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nuevo Envío
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filtro por estado -->
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
+      <span style="font-size:12.5px;font-weight:700;color:var(--rts-gray);">Filtrar:</span>
+      <a href="{{ url_for('shipments_list') }}"
+         class="btn btn-sm {% if not status_filter %}btn-navy{% else %}btn-outline-secondary{% endif %}">
+        Todos
+      </a>
+      {% for s, label in SHIPMENT_STATUS_LABELS.items() %}
+      <a href="{{ url_for('shipments_list', status=s) }}"
+         class="btn btn-sm {% if status_filter == s %}bg-{{ SHIPMENT_STATUS_BADGES[s] }} text-white{% else %}btn-outline-secondary{% endif %}">
+        {{ label }}
+      </a>
+      {% endfor %}
+    </form>
+  </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-truck me-2"></i>{{ shipments|length }} envío(s)</span>
+  </div>
+  <div class="card-body p-0">
+    {% if shipments %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">Carrier</th>
+            <th>Tracking #</th>
+            <th>Activo</th>
+            <th>Origen</th>
+            <th>Destino</th>
+            <th>Destinatario</th>
+            <th>Fecha Envío</th>
+            <th>Entrega Est.</th>
+            <th>Estado</th>
+            <th class="text-end pe-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in shipments %}
+          <tr>
+            <td class="ps-3">
+              {% if s.carrier == 'DHL' %}
+                <span class="dhl-logo">DHL</span>
+              {% else %}
+                <span class="fw-bold" style="font-size:13px;">{{ s.carrier }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{{ url_for('shipment_detail', id=s.id) }}" class="text-decoration-none">
+                <code style="font-size:12px;color:var(--rts-navy);font-weight:700;">{{ s.tracking_number }}</code>
+              </a>
+            </td>
+            <td>
+              <a href="{{ url_for('asset_detail', id=s.asset.id) }}" class="text-decoration-none fw-semibold text-navy" style="font-size:13px;">
+                {{ s.asset.name }}
+              </a>
+              <div class="asset-tag-badge d-inline-block ms-1">{{ s.asset.asset_tag }}</div>
+            </td>
+            <td style="font-size:12.5px;">{{ s.origin or '—' }}</td>
+            <td style="font-size:12.5px;">{{ s.destination or '—' }}</td>
+            <td style="font-size:12.5px;">{{ s.recipient_name or '—' }}</td>
+            <td>{{ s.ship_date | format_date }}</td>
+            <td>
+              {{ s.estimated_delivery | format_date }}
+              {% if s.estimated_delivery and s.status not in ['entregado','devuelto'] and s.estimated_delivery < today %}
+                <span class="badge bg-danger ms-1">Atrasado</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge bg-{{ SHIPMENT_STATUS_BADGES[s.status] }}">
+                {{ SHIPMENT_STATUS_LABELS[s.status] }}
+              </span>
+            </td>
+            <td class="text-end pe-3">
+              <a href="{{ url_for('shipment_detail', id=s.id) }}" class="btn btn-sm btn-outline-primary py-0 px-2">
+                <i class="bi bi-eye"></i>
+              </a>
+              <a href="{{ url_for('shipment_edit', id=s.id) }}" class="btn btn-sm btn-outline-secondary py-0 px-2">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form action="{{ url_for('shipment_delete', id=s.id) }}" method="post" class="d-inline"
+                    onsubmit="return confirm('¿Eliminar este envío?')">
+                <button class="btn btn-sm btn-outline-danger py-0 px-2"><i class="bi bi-trash"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-truck"></i>
+      <p>No hay envíos registrados.</p>
+      <a href="{{ url_for('shipment_new') }}" class="btn btn-navy btn-sm">Registrar primer envío</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Panel Admin — RTS Asset Management{% endblock %}
+{% block page_title %}Panel de Administración{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('admin.branding') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-palette me-1"></i>Branding
+  </a>
+  <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-people me-1"></i>Usuarios
+  </a>
+  <a href="{{ url_for('admin.logs') }}" class="btn btn-navy btn-sm">
+    <i class="bi bi-journal-text me-1"></i>Ver Logs
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+
+  <!-- Stat: Usuarios -->
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#EBF5FB;">
+        <i class="bi bi-people-fill" style="color:var(--rts-blue);"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ total_users }}</div>
+        <div class="stat-label">Usuarios</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stat: Eventos registrados -->
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#FFF3E0;">
+        <i class="bi bi-journal-check" style="color:#E65100;"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ total_logs }}</div>
+        <div class="stat-label">Eventos en Log</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stat: Logo -->
+  <div class="col-sm-6 col-lg-3">
+    <a href="{{ url_for('admin.branding') }}" class="stat-card text-decoration-none">
+      <div class="stat-icon" style="background:{% if logo_exists %}#E6F5EC{% else %}#FFF0F0{% endif %};">
+        <i class="bi bi-image" style="color:{% if logo_exists %}#1B5E20{% else %}#b00{% endif %};"></i>
+      </div>
+      <div>
+        <div class="stat-value" style="font-size:1.2rem;">{% if logo_exists %}✓{% else %}—{% endif %}</div>
+        <div class="stat-label">Logo</div>
+      </div>
+    </a>
+  </div>
+
+  <!-- Stat: Remoties -->
+  <div class="col-sm-6 col-lg-3">
+    <a href="{{ url_for('admin.branding') }}" class="stat-card text-decoration-none">
+      <div class="stat-icon" style="background:{% if remoties_exists %}#E6F5EC{% else %}#FFF0F0{% endif %};">
+        <i class="bi bi-emoji-smile" style="color:{% if remoties_exists %}#1B5E20{% else %}#b00{% endif %};"></i>
+      </div>
+      <div>
+        <div class="stat-value" style="font-size:1.2rem;">{% if remoties_exists %}✓{% else %}—{% endif %}</div>
+        <div class="stat-label">Remoties</div>
+      </div>
+    </a>
+  </div>
+
+</div>
+
+<div class="row g-3">
+
+  <!-- Accesos rápidos -->
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-grid me-2"></i>Accesos Rápidos</div>
+      <div class="card-body d-flex flex-column gap-2 pt-3">
+        <a href="{{ url_for('admin.branding') }}" class="btn btn-outline-secondary text-start">
+          <i class="bi bi-palette me-2"></i>Gestionar Branding (logos, favicon)
+        </a>
+        <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary text-start">
+          <i class="bi bi-person-plus me-2"></i>Gestionar Usuarios
+        </a>
+        <a href="{{ url_for('admin.user_new') }}" class="btn btn-rts text-start">
+          <i class="bi bi-plus-lg me-2"></i>Crear Nuevo Usuario
+        </a>
+        <a href="{{ url_for('admin.logs') }}" class="btn btn-outline-secondary text-start">
+          <i class="bi bi-journal-text me-2"></i>Ver Audit Log Completo
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Actividad reciente -->
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-clock-history me-2"></i>Actividad Reciente</span>
+        <a href="{{ url_for('admin.logs') }}" style="font-size:12px;">Ver todo →</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_logs %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0" style="font-size:12.5px;">
+            <thead>
+              <tr>
+                <th class="ps-3">Fecha</th>
+                <th>Usuario</th>
+                <th>Acción</th>
+                <th>Entidad</th>
+                <th class="pe-3">Detalle</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for log in recent_logs %}
+              <tr>
+                <td class="ps-3" style="white-space:nowrap;color:var(--rts-gray);">
+                  {{ log.created_at.strftime('%d/%m/%Y %H:%M') if log.created_at else '—' }}
+                </td>
+                <td class="fw-semibold">{{ log.user_name or '—' }}</td>
+                <td>
+                  {% set action_colors = {'create':'success','update':'primary','delete':'danger','login':'info','logout':'secondary','upload':'warning'} %}
+                  <span class="badge bg-{{ action_colors.get(log.action, 'secondary') }}">
+                    {{ log.action }}
+                  </span>
+                </td>
+                <td>{{ log.entity_type }} {% if log.entity_name %}<span style="color:var(--rts-gray);">· {{ log.entity_name[:30] }}{% if log.entity_name|length > 30 %}…{% endif %}</span>{% endif %}</td>
+                <td class="pe-3" style="color:var(--rts-gray);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                  {{ log.details or '—' }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state py-4">
+          <i class="bi bi-journal"></i>
+          <p>Sin actividad registrada aún.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

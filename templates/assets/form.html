@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if asset else 'Nuevo' }} Activo — RTS{% endblock %}
+{% block page_title %}{{ 'Editar Activo' if asset else 'Nuevo Activo' }}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ return_url }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+{% endblock %}
+
+{% block content %}
+{% set lt = form.get('location_type', asset.location_type if asset else 'en_sitio') | default('en_sitio') %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <form method="post">
+      <input type="hidden" name="return_url" value="{{ return_url }}">
+
+      <!-- ① Identificación ─────────────────────────────── -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-upc me-2"></i>Identificación</div>
+        <div class="card-body">
+          <div class="row g-3">
+
+            <div class="col-sm-4">
+              <label class="form-label">ID Activo (Asset Tag) <span class="text-danger">*</span></label>
+              <input type="text" name="asset_tag" class="form-control" required
+                     value="{{ form.get('asset_tag', asset.asset_tag if asset else '') }}"
+                     placeholder="Ej. RTS-L001"
+                     style="font-family:monospace;font-weight:700;">
+            </div>
+
+            <div class="col-sm-8">
+              <label class="form-label">Nombre / Descripción <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" required
+                     value="{{ form.get('name', asset.name if asset else '') }}"
+                     placeholder="Ej. Laptop Dell XPS 15">
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">Cliente / Empresa</label>
+              <div class="input-group">
+                <select name="client_id" class="form-select">
+                  <option value="">— Sin cliente —</option>
+                  {% for cli in clients %}
+                  <option value="{{ cli.id }}"
+                    {% if form.get('client_id', (asset.client_id|string if asset else '')) == cli.id|string %}selected{% endif %}>
+                    {{ cli.name }}
+                  </option>
+                  {% endfor %}
+                </select>
+                <a href="{{ url_for('client_new') }}" class="btn btn-outline-secondary" title="Agregar cliente" tabindex="-1" target="_blank">
+                  <i class="bi bi-plus-lg"></i>
+                </a>
+              </div>
+              <div class="form-text">¿No aparece? <a href="{{ url_for('client_new') }}" target="_blank">Agregar cliente</a></div>
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">Categoría</label>
+              <select name="category_id" class="form-select">
+                <option value="">— Sin categoría —</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}"
+                  {% if form.get('category_id', (asset.category_id|string if asset else '')) == cat.id|string %}selected{% endif %}>
+                  {{ cat.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">Estado <span class="text-danger">*</span></label>
+              <select name="status" class="form-select" required>
+                {% for s, label in STATUS_LABELS.items() %}
+                <option value="{{ s }}"
+                  {% if form.get('status', asset.status if asset else 'available') == s %}selected{% endif %}>
+                  {{ label }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">Número de Serie</label>
+              <input type="text" name="serial_number" class="form-control"
+                     value="{{ form.get('serial_number', asset.serial_number if asset else '') }}"
+                     placeholder="S/N"
+                     style="font-family:monospace;">
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ② Características del equipo ────────────────── -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-cpu me-2"></i>Características del Equipo</div>
+        <div class="card-body">
+          <div class="row g-3">
+
+            <div class="col-sm-4">
+              <label class="form-label">Fabricante</label>
+              <input type="text" name="manufacturer" class="form-control"
+                     value="{{ form.get('manufacturer', asset.manufacturer if asset else '') }}"
+                     placeholder="Ej. Dell, Apple, HP">
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">Modelo</label>
+              <input type="text" name="model" class="form-control"
+                     value="{{ form.get('model', asset.model if asset else '') }}"
+                     placeholder="Ej. XPS 15 9530">
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">RAM</label>
+              <input type="text" name="ram" class="form-control"
+                     value="{{ form.get('ram', asset.ram if asset else '') }}"
+                     placeholder="Ej. 16 GB DDR5">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Procesador (CPU)</label>
+              <input type="text" name="cpu" class="form-control"
+                     value="{{ form.get('cpu', asset.cpu if asset else '') }}"
+                     placeholder="Ej. Intel Core i7-1365U">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Sistema Operativo</label>
+              <input type="text" name="os_version" class="form-control"
+                     value="{{ form.get('os_version', asset.os_version if asset else '') }}"
+                     placeholder="Ej. Windows 11 Pro, macOS 15">
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ③ Compra & Proveedor ──────────────────────────── -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-receipt me-2"></i>Compra & Proveedor</div>
+        <div class="card-body">
+          <div class="row g-3">
+
+            <div class="col-sm-4">
+              <label class="form-label">Costo <span style="color:var(--rts-gray);font-weight:400;">(MXN)</span></label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" name="purchase_cost" class="form-control"
+                       step="0.01" min="0"
+                       value="{{ form.get('purchase_cost', asset.purchase_cost if asset else '') }}"
+                       placeholder="0.00">
+                <span class="input-group-text" style="font-size:11px;color:#aaa;">MXN</span>
+              </div>
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">Proveedor</label>
+              <input type="text" name="supplier" class="form-control"
+                     value="{{ form.get('supplier', asset.supplier if asset else '') }}"
+                     placeholder="Ej. Dell Direct, CompuSoluciones">
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">Fecha de Compra</label>
+              <input type="date" name="purchase_date" class="form-control"
+                     value="{{ form.get('purchase_date', asset.purchase_date.strftime('%Y-%m-%d') if asset and asset.purchase_date else '') }}">
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">Garantía hasta</label>
+              <input type="date" name="warranty_expiry" class="form-control"
+                     value="{{ form.get('warranty_expiry', asset.warranty_expiry.strftime('%Y-%m-%d') if asset and asset.warranty_expiry else '') }}">
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">Último Mantenimiento</label>
+              <input type="date" name="last_maintenance" class="form-control"
+                     value="{{ form.get('last_maintenance', asset.last_maintenance.strftime('%Y-%m-%d') if asset and asset.last_maintenance else '') }}">
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ④ Ubicación ───────────────────────────────────── -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-geo-alt me-2"></i>Ubicación</div>
+        <div class="card-body">
+          <div class="row g-3">
+
+            <div class="col-sm-6">
+              <label class="form-label">Descripción de Ubicación</label>
+              <input type="text" name="location" class="form-control"
+                     value="{{ form.get('location', asset.location if asset else '') }}"
+                     placeholder="Ej. Oficina Central, Almacén IT, Cliente ABC">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label d-block mb-2">Tipo de Ubicación</label>
+              <div class="location-type-toggle">
+                <input type="radio" name="location_type" id="lt_ensitio" value="en_sitio"
+                       {% if lt == 'en_sitio' %}checked{% endif %}>
+                <label for="lt_ensitio"><i class="bi bi-building me-1"></i>En Sitio</label>
+
+                <input type="radio" name="location_type" id="lt_hibrido" value="hibrido"
+                       {% if lt == 'hibrido' %}checked{% endif %}>
+                <label for="lt_hibrido"><i class="bi bi-shuffle me-1"></i>Híbrido</label>
+
+                <input type="radio" name="location_type" id="lt_foraneo" value="foraneo"
+                       {% if lt == 'foraneo' %}checked{% endif %}>
+                <label for="lt_foraneo"><i class="bi bi-truck me-1"></i>Foráneo</label>
+              </div>
+              <div class="form-text mt-1" id="loc-help-foraneo"
+                   {% if lt not in ('foraneo', 'hibrido') %}style="display:none"{% endif %}>
+                <i class="bi bi-info-circle me-1 text-warning"></i>
+                Podrás registrar envíos DHL desde la ficha del activo.
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ⑤ Notas ───────────────────────────────────────── -->
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-chat-left-text me-2"></i>Notas</div>
+        <div class="card-body">
+          <textarea name="notes" class="form-control" rows="3"
+                    placeholder="Observaciones adicionales, configuraciones especiales...">{{ form.get('notes', asset.notes if asset else '') }}</textarea>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-rts px-4">
+          <i class="bi bi-check-lg me-1"></i>{{ 'Guardar Cambios' if asset else 'Crear Activo' }}
+        </button>
+        <a href="{{ return_url }}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>Volver sin guardar
+        </a>
+      </div>
+
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('input[name="location_type"]').forEach(r => {
+    r.addEventListener('change', () => {
+      const show = document.getElementById('lt_foraneo').checked ||
+                   document.getElementById('lt_hibrido').checked;
+      document.getElementById('loc-help-foraneo').style.display = show ? '' : 'none';
+    });
+  });
+</script>
+{% endblock %}

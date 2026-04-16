@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Usuarios — Admin RTS{% endblock %}
+{% block page_title %}Gestión de Usuarios{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('admin.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Panel Admin
+  </a>
+  <a href="{{ url_for('admin.user_new') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-person-plus me-1"></i>Nuevo Usuario
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-people me-2"></i>{{ users|length }} usuario(s)</span>
+    <span style="font-size:11.5px;color:var(--rts-gray);">Solo administradores pueden ver esta pantalla</span>
+  </div>
+  <div class="card-body p-0">
+    {% if users %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">ID</th>
+            <th>Nombre</th>
+            <th>Usuario</th>
+            <th>Email</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th>Creado</th>
+            <th class="text-end pe-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td class="ps-3" style="color:var(--rts-gray);font-size:12px;">#{{ u.id }}</td>
+            <td class="fw-semibold">{{ u.name }}</td>
+            <td><code style="font-size:12px;color:var(--rts-navy);">{{ u.username }}</code></td>
+            <td style="font-size:12.5px;">{{ u.email or '—' }}</td>
+            <td>
+              {% if u.role == 'admin' %}
+                <span class="badge" style="background:var(--rts-navy);">Admin</span>
+              {% else %}
+                <span class="badge bg-secondary">Viewer</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if u.active %}
+                <span class="badge bg-success">Activo</span>
+              {% else %}
+                <span class="badge bg-danger">Inactivo</span>
+              {% endif %}
+            </td>
+            <td style="font-size:12px;color:var(--rts-gray);">
+              {{ u.created_at.strftime('%d/%m/%Y') if u.created_at else '—' }}
+            </td>
+            <td class="text-end pe-3" style="white-space:nowrap;">
+              <a href="{{ url_for('admin.user_edit', id=u.id) }}"
+                 class="btn btn-sm btn-outline-secondary py-0 px-2" title="Editar">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <!-- Toggle activo/inactivo -->
+              <form action="{{ url_for('admin.user_toggle', id=u.id) }}" method="post" class="d-inline">
+                <button class="btn btn-sm py-0 px-2 {{ 'btn-outline-warning' if u.active else 'btn-outline-success' }}"
+                        title="{{ 'Desactivar' if u.active else 'Activar' }}"
+                        onclick="return confirm('¿{{ 'Desactivar' if u.active else 'Activar' }} al usuario {{ u.name }}?')">
+                  <i class="bi bi-{{ 'toggle-on' if u.active else 'toggle-off' }}"></i>
+                </button>
+              </form>
+              <!-- Eliminar -->
+              {% if u.id != current_user.id %}
+              <form action="{{ url_for('admin.user_delete', id=u.id) }}" method="post" class="d-inline">
+                <button class="btn btn-sm btn-outline-danger py-0 px-2" title="Eliminar"
+                        onclick="return confirm('¿Eliminar al usuario {{ u.name }}? Esta acción no se puede deshacer.')">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state py-4">
+      <i class="bi bi-people"></i>
+      <p>No hay usuarios registrados.</p>
+      <a href="{{ url_for('admin.user_new') }}" class="btn btn-rts btn-sm">Crear primer usuario</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

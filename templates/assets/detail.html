@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+
+{% block title %}{{ asset.name }} - RTS Asset Management{% endblock %}
+{% block page_title %}Detalle de Activo{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ return_url }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+  <a href="{{ url_for('asset_edit', id=asset.id, return_url=return_url) }}"
+     class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-pencil me-1"></i>Editar
+  </a>
+  {% if asset.status == 'available' %}
+  <a href="{{ url_for('assignment_new') }}?asset_id={{ asset.id }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-arrow-right-circle me-1"></i>Asignar
+  </a>
+  {% endif %}
+  {% if asset.location_type in ('foraneo', 'hibrido') %}
+  <a href="{{ url_for('shipment_new', asset_id=asset.id) }}" class="btn btn-sm btn-navy">
+    <i class="bi bi-truck me-1"></i>Nuevo Envío
+  </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+
+  <!-- ── Columna principal ────────────────────────────────── -->
+  <div class="col-lg-8">
+
+    <!-- Info general -->
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-laptop"></i>
+        <span>{{ asset.name }}</span>
+        <span class="asset-tag-badge ms-1">{{ asset.asset_tag }}</span>
+        <span class="badge bg-{{ STATUS_BADGES[asset.status] }} ms-auto">{{ STATUS_LABELS[asset.status] }}</span>
+        {% if asset.location_type == 'foraneo' %}
+          <span class="pill-foraneo"><i class="bi bi-truck me-1"></i>Foráneo</span>
+        {% elif asset.location_type == 'hibrido' %}
+          <span class="pill-hibrido"><i class="bi bi-shuffle me-1"></i>Híbrido</span>
+        {% else %}
+          <span class="pill-ensitio"><i class="bi bi-building me-1"></i>En Sitio</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-sm-6">
+            <div class="mb-3">
+              <div class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.06em;">Cliente / Empresa</div>
+              <div>
+                {% if asset.client %}
+                  <i class="bi bi-building me-1" style="color:var(--rts-blue);"></i>
+                  <strong>{{ asset.client.name }}</strong>
+                {% else %}—{% endif %}
+              </div>
+            </div>
+            <div class="mb-3">
+              <div class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.06em;">Categoría</div>
+              <div>{{ asset.category.name if asset.category else '—' }}</div>
+            </div>
+            <div class="mb-3">
+              <div class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.06em;">Fabricante</div>
+              <div>{{ asset.manufacturer or '—' }}</div>
+            </div>
+            <div class="mb-3">
+              <div class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.06em;">Modelo</div>
+              <div>{{ asset.model or '—' }}</div>
+            </div>
+            <div class="mb-3">
+              <div class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.06em;">Número de Serie</div>
+              <div>{{ asset.serial_number or '—' }}</div>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="mb-3">
+              <div class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.06em;">Ubicación</div>
+              <div>{{ asset.location or '—' }}</div>
+            </div>
+            <div class="mb-3">
+              <div class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.06em;">Fecha de Compra</div>
+              <div>{{ asset.purchase_date | format_date }}</div>
+            </div>
+            <div class="mb-3">
+              <div class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.06em;">Costo de Compra</div>
+              <div>{{ asset.purchase_cost | format_currency }}</div>
+            </div>
+            <div class="mb-3">
+              <div class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.06em;">Garantía hasta</div>
+              <div>
+                {{ asset.warranty_expiry | format_date }}
+                {% if asset.warranty_expiry and asset.warranty_expiry < today %}
+                  <span class="badge bg-danger ms-1">Vencida</span>
+                {% elif asset.warranty_expiry %}
+                  <span class="badge bg-success ms-1">Vigente</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% if asset.notes %}
+          <div class="col-12">
+            <div class="text-muted" style="font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.06em;">Notas</div>
+            <div class="mt-1" style="white-space:pre-wrap;font-size:13.5px;">{{ asset.notes }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Envíos DHL (foráneo e híbrido) -->
+    {% if asset.location_type in ('foraneo', 'hibrido') %}
+    <div class="card mb-3 dhl-card">
+      <div class="card-header d-flex align-items-center justify-content-between" style="background:#FFFEF5;border-bottom:1px solid #F0E8B0;">
+        <span>
+          <span class="dhl-logo me-2">DHL</span>
+          <span style="font-family:'Oswald',sans-serif;font-size:15px;">Historial de Envíos</span>
+        </span>
+        <a href="{{ url_for('shipment_new', asset_id=asset.id) }}" class="btn btn-sm btn-navy">
+          <i class="bi bi-plus-lg me-1"></i>Nuevo Envío
+        </a>
+      </div>
+      <div class="card-body p-0">
+        {% if asset.shipments %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th class="ps-3">Carrier</th>
+                <th>Tracking #</th>
+                <th>Origen → Destino</th>
+                <th>Envío</th>
+                <th>Entrega Est.</th>
+                <th>Estado</th>
+                <th class="text-end pe-3">Ver</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in asset.shipments %}
+              <tr>
+                <td class="ps-3">
+                  {% if s.carrier == 'DHL' %}
+                    <span class="dhl-logo">DHL</span>
+                  {% else %}
+                    <span class="fw-bold">{{ s.carrier }}</span>
+                  {% endif %}
+                </td>
+                <td><code style="font-size:12px;color:var(--rts-navy);">{{ s.tracking_number }}</code></td>
+                <td style="font-size:12.5px;">
+                  {% if s.origin %}{{ s.origin }}{% endif %}
+                  {% if s.origin and s.destination %} <i class="bi bi-arrow-right mx-1"></i> {% endif %}
+                  {% if s.destination %}{{ s.destination }}{% endif %}
+                  {% if not s.origin and not s.destination %}—{% endif %}
+                </td>
+                <td>{{ s.ship_date | format_date }}</td>
+                <td>{{ s.estimated_delivery | format_date }}</td>
+                <td>
+                  <span class="badge bg-{{ SHIPMENT_STATUS_BADGES[s.status] }}">
+                    {{ SHIPMENT_STATUS_LABELS[s.status] }}
+                  </span>
+                </td>
+                <td class="text-end pe-3">
+                  <a href="{{ url_for('shipment_detail', id=s.id) }}" class="btn btn-sm btn-outline-primary py-0 px-2">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state py-3">
+          <i class="bi bi-truck"></i>
+          <p>Sin envíos registrados para este activo.</p>
+          <a href="{{ url_for('shipment_new', asset_id=asset.id) }}" class="btn btn-sm btn-navy">
+            Registrar primer envío
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Historial de Asignaciones -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-clock-history me-2"></i>Historial de Asignaciones</div>
+      <div class="card-body p-0">
+        {% if asset.assignments %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th class="ps-3">Empleado</th>
+                <th>Departamento</th>
+                <th>Asignado</th>
+                <th>Devuelto</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in asset.assignments %}
+              <tr>
+                <td class="ps-3 fw-semibold">{{ a.employee.name }}</td>
+                <td>{{ a.employee.department or '—' }}</td>
+                <td>{{ a.assigned_date | format_date }}</td>
+                <td>{{ a.returned_date | format_date }}</td>
+                <td>
+                  {% if not a.returned_date %}
+                    <span class="badge bg-primary">Activa</span>
+                  {% else %}
+                    <span class="badge bg-secondary">Devuelta</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state py-3">
+          <i class="bi bi-clock-history"></i>
+          <p>Sin historial de asignaciones.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Sidebar ─────────────────────────────────────────── -->
+  <div class="col-lg-4">
+
+    <!-- Asignación actual -->
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-person-check me-2"></i>Asignación Actual</div>
+      <div class="card-body">
+        {% set ca = asset.current_assignment %}
+        {% if ca %}
+          <div class="fw-semibold mb-1" style="font-size:14.5px;">{{ ca.employee.name }}</div>
+          <div class="text-muted" style="font-size:12.5px;">{{ ca.employee.department or '' }}</div>
+          {% if ca.employee.email %}
+          <div class="text-muted" style="font-size:12px;"><i class="bi bi-envelope me-1"></i>{{ ca.employee.email }}</div>
+          {% endif %}
+          <div class="text-muted mt-2" style="font-size:12px;">Desde: {{ ca.assigned_date | format_date }}</div>
+          {% if ca.notes %}
+          <div class="text-muted mt-1" style="font-size:12px;font-style:italic;">{{ ca.notes }}</div>
+          {% endif %}
+          <hr>
+          <form action="{{ url_for('assignment_return', id=ca.id) }}" method="post"
+                onsubmit="return confirm('¿Confirmar devolución?')">
+            <input type="hidden" name="returned_date" value="{{ today }}">
+            <button type="submit" class="btn btn-warning btn-sm w-100">
+              <i class="bi bi-arrow-return-left me-1"></i>Registrar Devolución
+            </button>
+          </form>
+        {% else %}
+          <div class="text-center py-2" style="color:var(--rts-gray);">
+            <i class="bi bi-person-dash d-block mb-1" style="font-size:2rem;opacity:.3;"></i>
+            Sin asignación activa
+          </div>
+          {% if asset.status == 'available' %}
+          <a href="{{ url_for('assignment_new') }}?asset_id={{ asset.id }}" class="btn btn-rts btn-sm w-100 mt-2">
+            <i class="bi bi-arrow-right-circle me-1"></i>Asignar Ahora
+          </a>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Envío activo (foráneo / híbrido) -->
+    {% if asset.location_type in ('foraneo', 'hibrido') and asset.active_shipment %}
+    {% set s = asset.active_shipment %}
+    <div class="card mb-3 dhl-card">
+      <div class="card-header" style="background:#FFFEF5;border-bottom:1px solid #F0E8B0;">
+        <span class="dhl-logo me-2">{{ s.carrier }}</span>Envío Activo
+      </div>
+      <div class="card-body" style="font-size:13px;">
+        <div class="mb-2">
+          <span class="text-muted">Tracking:</span>
+          <code class="ms-1" style="color:var(--rts-navy);font-size:12px;">{{ s.tracking_number }}</code>
+        </div>
+        {% if s.origin %}
+        <div class="mb-1"><i class="bi bi-geo-alt me-1 text-muted"></i>{{ s.origin }}</div>
+        {% endif %}
+        {% if s.destination %}
+        <div class="mb-2"><i class="bi bi-geo-alt-fill me-1" style="color:var(--rts-blue);"></i>{{ s.destination }}</div>
+        {% endif %}
+        <span class="badge bg-{{ SHIPMENT_STATUS_BADGES[s.status] }}">{{ SHIPMENT_STATUS_LABELS[s.status] }}</span>
+        <hr>
+        <a href="{{ url_for('shipment_detail', id=s.id) }}" class="btn btn-sm btn-navy w-100">
+          <i class="bi bi-search me-1"></i>Ver Trazabilidad
+        </a>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Meta -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-info-circle me-2"></i>Información</div>
+      <div class="card-body" style="font-size:12.5px;">
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">ID interno</span>
+          <span class="fw-semibold">#{{ asset.id }}</span>
+        </div>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Creado</span>
+          <span>{{ asset.created_at.strftime('%d/%m/%Y') if asset.created_at else '—' }}</span>
+        </div>
+        <div class="d-flex justify-content-between">
+          <span class="text-muted">Actualizado</span>
+          <span>{{ asset.updated_at.strftime('%d/%m/%Y') if asset.updated_at else '—' }}</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

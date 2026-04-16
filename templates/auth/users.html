@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Usuarios — RTS{% endblock %}
+{% block page_title %}Gestión de Usuarios{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('auth.user_new') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-person-plus me-1"></i>Nuevo Usuario
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-people me-2"></i>{{ users|length }} usuario(s)</span>
+  </div>
+  <div class="card-body p-0">
+    {% if users %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">Nombre</th>
+            <th>Usuario</th>
+            <th>Email</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th>Creado</th>
+            <th class="text-end pe-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td class="ps-3 fw-semibold">
+              {{ u.name }}
+              {% if u.id == current_user.id %}
+                <span class="badge bg-secondary ms-1" style="font-size:10px;">Tú</span>
+              {% endif %}
+            </td>
+            <td><span class="asset-tag-badge">{{ u.username }}</span></td>
+            <td style="font-size:13px;">{{ u.email or '—' }}</td>
+            <td>
+              {% if u.role == 'admin' %}
+                <span class="badge" style="background:var(--rts-navy);">Admin</span>
+              {% else %}
+                <span class="badge bg-secondary">Viewer</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if u.active %}
+                <span class="badge bg-success">Activo</span>
+              {% else %}
+                <span class="badge bg-danger">Inactivo</span>
+              {% endif %}
+            </td>
+            <td style="font-size:12.5px;">{{ u.created_at.strftime('%d/%m/%Y') if u.created_at else '—' }}</td>
+            <td class="text-end pe-3">
+              <a href="{{ url_for('auth.user_edit', id=u.id) }}"
+                 class="btn btn-sm btn-outline-secondary py-0 px-2">
+                <i class="bi bi-pencil"></i>
+              </a>
+              {% if u.id != current_user.id %}
+              <form action="{{ url_for('auth.user_delete', id=u.id) }}" method="post" class="d-inline"
+                    onsubmit="return confirm('¿Eliminar usuario {{ u.name }}?')">
+                <button class="btn btn-sm btn-outline-danger py-0 px-2">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-people"></i>
+      <p>No hay usuarios creados.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mt-3" style="border-left:4px solid var(--rts-blue);">
+  <div class="card-body" style="font-size:13px;">
+    <strong><i class="bi bi-info-circle me-2" style="color:var(--rts-blue);"></i>Roles:</strong>
+    <span class="badge ms-2" style="background:var(--rts-navy);">Admin</span> Acceso total — crear/editar/eliminar activos y gestionar usuarios.
+    <span class="badge bg-secondary ms-3">Viewer</span> Solo lectura — puede ver activos pero no modificar.
+  </div>
+</div>
+{% endblock %}

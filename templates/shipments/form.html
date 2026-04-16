@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if shipment else 'Nuevo' }} Envío - RTS{% endblock %}
+{% block page_title %}{{ 'Editar Envío' if shipment else 'Registrar Nuevo Envío' }}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('shipments_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Cancelar
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <form method="post">
+
+      <!-- Activo & Carrier -->
+      <div class="card mb-3">
+        <div class="card-header">
+          <span class="dhl-logo me-2">{{ shipment.carrier if shipment else 'DHL' }}</span>
+          Información del Envío
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+
+            <div class="col-sm-8">
+              <label class="form-label">Activo Foráneo <span class="text-danger">*</span></label>
+              <select name="asset_id" class="form-select" required>
+                <option value="">— Seleccionar activo —</option>
+                {% for asset in foraneo_assets %}
+                <option value="{{ asset.id }}"
+                  {% if pre_asset == asset.id|string or (shipment and shipment.asset_id == asset.id) %}selected{% endif %}>
+                  [{{ asset.asset_tag }}] {{ asset.name }}
+                  {% if asset.manufacturer %} — {{ asset.manufacturer }}{% endif %}
+                </option>
+                {% endfor %}
+              </select>
+              {% if not foraneo_assets %}
+              <div class="form-text text-warning">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                No hay activos marcados como <strong>Foráneo</strong>. Edita el activo y cambia su tipo de ubicación primero.
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">Carrier <span class="text-danger">*</span></label>
+              <select name="carrier" class="form-select" required id="carrierSelect">
+                {% set carriers = ['DHL', 'FedEx', 'UPS', 'USPS', 'Estafeta', 'Otro'] %}
+                {% for c in carriers %}
+                <option value="{{ c }}"
+                  {% if form.get('carrier', shipment.carrier if shipment else 'DHL') == c %}selected{% endif %}>
+                  {{ c }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-sm-8">
+              <label class="form-label">Número de Rastreo (Tracking #) <span class="text-danger">*</span></label>
+              <input type="text" name="tracking_number" class="form-control" required
+                     value="{{ form.get('tracking_number', shipment.tracking_number if shipment else '') }}"
+                     placeholder="Ej. 1234567890">
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">Estado</label>
+              <select name="status" class="form-select">
+                {% for s, label in SHIPMENT_STATUS_LABELS.items() %}
+                <option value="{{ s }}"
+                  {% if form.get('status', shipment.status if shipment else 'pendiente') == s %}selected{% endif %}>
+                  {{ label }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Origen y Destino -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-geo-alt me-2"></i>Origen & Destino</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-sm-6">
+              <label class="form-label">Origen</label>
+              <input type="text" name="origin" class="form-control"
+                     value="{{ form.get('origin', shipment.origin if shipment else '') }}"
+                     placeholder="Ej. San Juan, PR · Oficina Central RTS">
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label">Destino</label>
+              <input type="text" name="destination" class="form-control"
+                     value="{{ form.get('destination', shipment.destination if shipment else '') }}"
+                     placeholder="Ej. Miami, FL · Cliente ABC">
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label">Nombre del Destinatario</label>
+              <input type="text" name="recipient_name" class="form-control"
+                     value="{{ form.get('recipient_name', shipment.recipient_name if shipment else '') }}"
+                     placeholder="Nombre de quien recibe">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fechas -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-calendar3 me-2"></i>Fechas</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-sm-4">
+              <label class="form-label">Fecha de Envío</label>
+              <input type="date" name="ship_date" class="form-control"
+                     value="{{ form.get('ship_date', shipment.ship_date.strftime('%Y-%m-%d') if shipment and shipment.ship_date else today.strftime('%Y-%m-%d')) }}">
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label">Entrega Estimada</label>
+              <input type="date" name="estimated_delivery" class="form-control"
+                     value="{{ form.get('estimated_delivery', shipment.estimated_delivery.strftime('%Y-%m-%d') if shipment and shipment.estimated_delivery else '') }}">
+            </div>
+            {% if shipment %}
+            <div class="col-sm-4">
+              <label class="form-label">Entrega Real</label>
+              <input type="date" name="actual_delivery" class="form-control"
+                     value="{{ form.get('actual_delivery', shipment.actual_delivery.strftime('%Y-%m-%d') if shipment and shipment.actual_delivery else '') }}">
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Notas -->
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-chat-left-text me-2"></i>Notas</div>
+        <div class="card-body">
+          <textarea name="notes" class="form-control" rows="3"
+                    placeholder="Observaciones, contenido del paquete, instrucciones especiales...">{{ form.get('notes', shipment.notes if shipment else '') }}</textarea>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-navy" {% if not foraneo_assets and not shipment %}disabled{% endif %}>
+          <i class="bi bi-check-lg me-1"></i>{{ 'Guardar Cambios' if shipment else 'Registrar Envío' }}
+        </button>
+        <a href="{{ url_for('shipments_list') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if client else 'Nuevo' }} Cliente — RTS{% endblock %}
+{% block page_title %}{{ 'Editar Cliente' if client else 'Nuevo Cliente' }}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('clients_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-building me-2"></i>
+        {{ 'Editar: ' + client.name if client else 'Agregar cliente / empresa' }}
+      </div>
+      <div class="card-body">
+        <form method="post">
+
+          <div class="mb-3">
+            <label class="form-label">Nombre de la empresa <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required autofocus
+                   value="{{ form.get('name', client.name if client else '') }}"
+                   placeholder="Ej. Remote Team Solutions, Acme Corp…">
+          </div>
+
+          {% if client %}
+          <div class="mb-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="active" id="chk_active"
+                     {% if form.get('active', client.active) %}checked{% endif %}>
+              <label class="form-check-label" for="chk_active">Cliente activo</label>
+            </div>
+            <div class="form-text">Los clientes inactivos no aparecen en el selector de activos.</div>
+          </div>
+
+          <!-- Activos asociados -->
+          {% if client.assets %}
+          <div class="mb-3">
+            <label class="form-label text-muted" style="font-size:12px;">
+              Activos asociados ({{ client.assets|length }})
+            </label>
+            <div style="max-height:160px;overflow-y:auto;border:1px solid var(--rts-border);border-radius:7px;padding:8px 12px;">
+              {% for a in client.assets %}
+              <div class="d-flex align-items-center gap-2 py-1" style="font-size:12.5px;border-bottom:1px solid #f0f0f0;">
+                <span class="asset-tag-badge">{{ a.asset_tag }}</span>
+                <span>{{ a.name }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+          {% endif %}
+
+          <hr>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-rts px-4">
+              <i class="bi bi-check-lg me-1"></i>{{ 'Guardar Cambios' if client else 'Crear Cliente' }}
+            </button>
+            <a href="{{ url_for('clients_list') }}" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-left me-1"></i>Cancelar
+            </a>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

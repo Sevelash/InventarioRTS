@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if employee else 'Nuevo' }} Empleado - RTS{% endblock %}
+{% block page_title %}{{ 'Editar Empleado' if employee else 'Nuevo Empleado' }}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('employees_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Cancelar
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <form method="post">
+      <div class="card mb-4">
+        <div class="card-header py-3"><i class="bi bi-person me-2"></i>Datos del Empleado</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-sm-8">
+              <label class="form-label">Nombre Completo <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" required
+                     value="{{ form.get('name', employee.name if employee else '') }}"
+                     placeholder="Ej. Juan Pérez García">
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label">ID de Empleado <span class="text-danger">*</span></label>
+              <input type="text" name="employee_id" class="form-control" required
+                     value="{{ form.get('employee_id', employee.employee_id if employee else '') }}"
+                     placeholder="Ej. EMP-001">
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label">Departamento</label>
+              <input type="text" name="department" class="form-control"
+                     value="{{ form.get('department', employee.department if employee else '') }}"
+                     placeholder="Ej. IT, Contabilidad, RRHH">
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label">Email</label>
+              <input type="email" name="email" class="form-control"
+                     value="{{ form.get('email', employee.email if employee else '') }}"
+                     placeholder="correo@empresa.com">
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label">Teléfono</label>
+              <input type="text" name="phone" class="form-control"
+                     value="{{ form.get('phone', employee.phone if employee else '') }}"
+                     placeholder="+1 (000) 000-0000">
+            </div>
+            {% if employee %}
+            <div class="col-sm-6 d-flex align-items-end">
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="active" id="active"
+                       {% if form.get('active') or (employee and employee.active and not form) %}checked{% endif %}>
+                <label class="form-check-label" for="active">Empleado activo</label>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-rts">
+          <i class="bi bi-check-lg me-1"></i>{{ 'Guardar Cambios' if employee else 'Crear Empleado' }}
+        </button>
+        <a href="{{ url_for('employees_list') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

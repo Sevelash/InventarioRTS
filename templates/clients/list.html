@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Clientes — RTS Asset Management{% endblock %}
+{% block page_title %}Clientes / Empresas{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('client_new') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nuevo Cliente
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Buscador -->
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="d-flex gap-2 align-items-center">
+      <div class="input-group input-group-sm" style="max-width:320px;">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="text" name="q" class="form-control" placeholder="Buscar cliente…"
+               value="{{ q }}" autocomplete="off">
+        {% if q %}
+        <button type="button" class="btn btn-outline-secondary btn-sm"
+                onclick="this.previousElementSibling.value='';this.closest('form').submit();">
+          <i class="bi bi-x"></i>
+        </button>
+        {% endif %}
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Buscar</button>
+      {% if q %}
+      <a href="{{ url_for('clients_list') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-x-circle me-1"></i>Limpiar
+      </a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-building me-2"></i>{{ clients|length }} cliente(s)</span>
+  </div>
+  <div class="card-body p-0">
+    {% if clients %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" style="font-size:13.5px;">
+        <thead>
+          <tr>
+            <th class="ps-3">Empresa / Cliente</th>
+            <th style="width:80px;">Activos</th>
+            <th style="width:90px;">Estado</th>
+            <th style="width:110px;">Creado</th>
+            <th class="text-end pe-3" style="width:110px;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cli in clients %}
+          <tr>
+            <td class="ps-3 fw-semibold">
+              <i class="bi bi-building me-2" style="color:var(--rts-blue);"></i>{{ cli.name }}
+            </td>
+            <td>
+              {% set count = cli.assets|length %}
+              {% if count %}
+                <a href="{{ url_for('assets_list') }}?q={{ cli.name }}"
+                   class="badge bg-primary text-decoration-none">{{ count }}</a>
+              {% else %}
+                <span class="text-muted">0</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if cli.active %}
+                <span class="badge bg-success">Activo</span>
+              {% else %}
+                <span class="badge bg-secondary">Inactivo</span>
+              {% endif %}
+            </td>
+            <td style="font-size:12px;color:var(--rts-gray);">
+              {{ cli.created_at.strftime('%d/%m/%Y') if cli.created_at else '—' }}
+            </td>
+            <td class="text-end pe-3" style="white-space:nowrap;">
+              <a href="{{ url_for('client_edit', id=cli.id) }}"
+                 class="btn btn-sm btn-outline-secondary py-0 px-2" title="Editar">
+                <i class="bi bi-pencil"></i>
+              </a>
+              {% if not cli.assets %}
+              <form action="{{ url_for('client_delete', id=cli.id) }}" method="post" class="d-inline">
+                <button class="btn btn-sm btn-outline-danger py-0 px-2" title="Eliminar"
+                        onclick="return confirm('¿Eliminar el cliente {{ cli.name }}?')">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-building"></i>
+      <p>No se encontraron clientes{% if q %} para "<strong>{{ q }}</strong>"{% endif %}.</p>
+      <a href="{{ url_for('client_new') }}" class="btn btn-rts btn-sm">Agregar primer cliente</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

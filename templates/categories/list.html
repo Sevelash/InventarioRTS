@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Categorías - RTS Asset Management{% endblock %}
+{% block page_title %}Categorías{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('category_new') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nueva Categoría
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex align-items-center py-3">
+    <i class="bi bi-tag me-2"></i>{{ categories|length }} categoría(s)
+  </div>
+  <div class="card-body p-0">
+    {% if categories %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">Nombre</th>
+            <th>Descripción</th>
+            <th>Activos</th>
+            <th class="text-end pe-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cat in categories %}
+          <tr>
+            <td class="ps-3 fw-semibold">{{ cat.name }}</td>
+            <td class="text-muted" style="font-size:0.875rem;">{{ cat.description or '—' }}</td>
+            <td>
+              <a href="{{ url_for('assets_list') }}?category={{ cat.id }}" class="badge bg-primary text-decoration-none">
+                {{ cat.assets|length }} activo(s)
+              </a>
+            </td>
+            <td class="text-end pe-3">
+              <a href="{{ url_for('category_edit', id=cat.id) }}" class="btn btn-sm btn-outline-secondary py-0 px-2">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form action="{{ url_for('category_delete', id=cat.id) }}" method="post" class="d-inline"
+                    onsubmit="return confirm('¿Eliminar categoría {{ cat.name }}?')">
+                <button class="btn btn-sm btn-outline-danger py-0 px-2"
+                        {% if cat.assets %}disabled title="Tiene activos asociados"{% endif %}>
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-tag d-block"></i>
+      No hay categorías creadas.
+      <div class="mt-2">
+        <a href="{{ url_for('category_new') }}" class="btn btn-rts btn-sm">Crear primera categoría</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

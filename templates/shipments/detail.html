@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}Envío {{ shipment.tracking_number }} - RTS{% endblock %}
+{% block page_title %}Trazabilidad de Envío{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('shipments_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+  <a href="{{ url_for('shipment_edit', id=shipment.id) }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-pencil me-1"></i>Editar
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+
+  <!-- ── Columna principal ────────────────────────────────── -->
+  <div class="col-lg-8">
+
+    <!-- Header del envío -->
+    <div class="card mb-3 dhl-card">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <div>
+            {% if shipment.carrier == 'DHL' %}
+              <span class="dhl-logo" style="font-size:22px;">DHL</span>
+            {% else %}
+              <span style="font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:var(--rts-navy);">{{ shipment.carrier }}</span>
+            {% endif %}
+          </div>
+          <div>
+            <div style="font-size:11px;text-transform:uppercase;font-weight:700;color:var(--rts-gray);letter-spacing:.06em;">Número de Rastreo</div>
+            <code style="font-size:18px;font-weight:700;color:var(--rts-navy);">{{ shipment.tracking_number }}</code>
+          </div>
+          <div class="ms-auto">
+            <span class="badge bg-{{ SHIPMENT_STATUS_BADGES[shipment.status] }}" style="font-size:13px;padding:6px 14px;">
+              {{ SHIPMENT_STATUS_LABELS[shipment.status] }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timeline de trazabilidad -->
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-diagram-3 me-2"></i>Trazabilidad del Envío</div>
+      <div class="card-body">
+
+        {% set step_order = ['pendiente', 'en_transito', 'en_aduana', 'entregado'] %}
+        {% set current_idx = step_order.index(shipment.status) if shipment.status in step_order else 0 %}
+
+        <!-- Barra de progreso visual -->
+        <div class="d-flex align-items-center mb-4" style="gap:0;">
+          {% set steps = [
+            ('pendiente',   'bi-clock',           'Pendiente'),
+            ('en_transito', 'bi-truck',            'En Tránsito'),
+            ('en_aduana',   'bi-shield-check',     'En Aduana'),
+            ('entregado',   'bi-check-circle-fill','Entregado'),
+          ] %}
+          {% for key, icon, label in steps %}
+            {% set idx = loop.index0 %}
+            {% set is_done   = idx < current_idx %}
+            {% set is_active = idx == current_idx and shipment.status != 'devuelto' %}
+            <div class="text-center flex-fill">
+              <div class="mx-auto mb-1 d-flex align-items-center justify-content-center"
+                   style="width:40px;height:40px;border-radius:50%;
+                          background:{% if is_done %}#28a745{% elif is_active %}var(--rts-blue){% else %}var(--rts-border){% endif %};
+                          color:{% if is_done or is_active %}#fff{% else %}var(--rts-gray){% endif %};
+                          font-size:16px;transition:all .3s;">
+                <i class="bi {{ icon }}"></i>
+              </div>
+              <div style="font-size:11px;font-weight:{% if is_active %}700{% else %}400{% endif %};
+                          color:{% if is_done %}#28a745{% elif is_active %}var(--rts-blue){% else %}var(--rts-gray){% endif %};">
+                {{ label }}
+              </div>
+            </div>
+            {% if not loop.last %}
+            <div style="height:2px;flex:1;margin-bottom:22px;
+                        background:{% if idx < current_idx %}#28a745{% else %}var(--rts-border){% endif %};"></div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        {% if shipment.status == 'devuelto' %}
+        <div class="alert alert-dark d-flex align-items-center gap-2 mb-3">
+          <i class="bi bi-arrow-return-left fs-5"></i>
+          <div>Este envío fue <strong>devuelto</strong> al remitente.
+            {% if shipment.actual_delivery %}el {{ shipment.actual_delivery | format_date }}{% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Detalle de pasos -->
+        <div class="shipment-timeline mt-3">
+          <div class="shipment-step {% if current_idx >= 0 %}done{% endif %}">
+            <strong>Envío registrado</strong>
+            <div class="text-muted" style="font-size:12px;">
+              {{ shipment.created_at.strftime('%d/%m/%Y %H:%M') if shipment.created_at else '—' }}
+            </div>
+          </div>
+
+          <div class="shipment-step {% if shipment.ship_date %}done{% elif shipment.status == 'pendiente' %}active{% endif %}">
+            <strong>Paquete recolectado / enviado</strong>
+            <div class="text-muted" style="font-size:12px;">
+              {% if shipment.ship_date %}{{ shipment.ship_date | format_date }}
+              {% elif shipment.origin %}Desde: {{ shipment.origin }}
+              {% else %}Pendiente de recolección{% endif %}
+            </div>
+          </div>
+
+          <div class="shipment-step {% if shipment.status in ['en_transito','en_aduana','entregado','devuelto'] %}done{% endif %}">
+            <strong>En tránsito</strong>
+            <div class="text-muted" style="font-size:12px;">
+              {% if shipment.destination %}Hacia: {{ shipment.destination }}{% endif %}
+              {% if shipment.estimated_delivery %} — Entrega estimada: {{ shipment.estimated_delivery | format_date }}{% endif %}
+            </div>
+          </div>
+
+          {% if shipment.status == 'en_aduana' or (shipment.status in ['entregado','devuelto'] and shipment.notes and 'aduana' in shipment.notes|lower) %}
+          <div class="shipment-step {% if shipment.status in ['entregado','devuelto'] %}done{% else %}active{% endif %}">
+            <strong>En proceso de aduana</strong>
+            <div class="text-muted" style="font-size:12px;">Revisión en aduana en curso</div>
+          </div>
+          {% endif %}
+
+          <div class="shipment-step {% if shipment.status == 'entregado' %}done{% elif shipment.status == 'devuelto' %}done{% endif %}">
+            <strong>
+              {% if shipment.status == 'entregado' %}Entregado exitosamente
+              {% elif shipment.status == 'devuelto' %}Devuelto al remitente
+              {% else %}Entrega pendiente{% endif %}
+            </strong>
+            <div class="text-muted" style="font-size:12px;">
+              {% if shipment.actual_delivery %}{{ shipment.actual_delivery | format_date }}
+              {% elif shipment.recipient_name %}Para: {{ shipment.recipient_name }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+        </div>
+
+        {% if shipment.notes %}
+        <div class="mt-3 p-3 rounded" style="background:var(--rts-bg);font-size:13px;">
+          <strong>Notas:</strong> {{ shipment.notes }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Actualizar estado rápido -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-arrow-repeat me-2"></i>Actualizar Estado</div>
+      <div class="card-body">
+        <form action="{{ url_for('shipment_edit', id=shipment.id) }}" method="post" class="row g-2 align-items-end">
+          <!-- Reenviar todos los campos actuales para no perderlos -->
+          <input type="hidden" name="carrier"          value="{{ shipment.carrier }}">
+          <input type="hidden" name="tracking_number"  value="{{ shipment.tracking_number }}">
+          <input type="hidden" name="origin"           value="{{ shipment.origin or '' }}">
+          <input type="hidden" name="destination"      value="{{ shipment.destination or '' }}">
+          <input type="hidden" name="recipient_name"   value="{{ shipment.recipient_name or '' }}">
+          <input type="hidden" name="ship_date"        value="{{ shipment.ship_date.strftime('%Y-%m-%d') if shipment.ship_date else '' }}">
+          <input type="hidden" name="estimated_delivery" value="{{ shipment.estimated_delivery.strftime('%Y-%m-%d') if shipment.estimated_delivery else '' }}">
+          <input type="hidden" name="notes"            value="{{ shipment.notes or '' }}">
+
+          <div class="col-sm-4">
+            <label class="form-label">Nuevo Estado</label>
+            <select name="status" class="form-select form-select-sm">
+              {% for s, label in SHIPMENT_STATUS_LABELS.items() %}
+              <option value="{{ s }}" {% if s == shipment.status %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-4">
+            <label class="form-label">Fecha de Entrega Real</label>
+            <input type="date" name="actual_delivery" class="form-control form-control-sm"
+                   value="{{ shipment.actual_delivery.strftime('%Y-%m-%d') if shipment.actual_delivery else '' }}">
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-rts btn-sm">
+              <i class="bi bi-check-lg me-1"></i>Actualizar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Sidebar ─────────────────────────────────────────── -->
+  <div class="col-lg-4">
+
+    <!-- Activo relacionado -->
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-laptop me-2"></i>Activo</div>
+      <div class="card-body">
+        <div class="fw-semibold mb-1" style="font-size:14.5px;">{{ shipment.asset.name }}</div>
+        <div class="asset-tag-badge mb-2">{{ shipment.asset.asset_tag }}</div>
+        {% if shipment.asset.manufacturer or shipment.asset.model %}
+        <div class="text-muted" style="font-size:12.5px;">
+          {{ shipment.asset.manufacturer or '' }} {{ shipment.asset.model or '' }}
+        </div>
+        {% endif %}
+        <hr>
+        <a href="{{ url_for('asset_detail', id=shipment.asset.id) }}" class="btn btn-outline-primary btn-sm w-100">
+          Ver Ficha del Activo
+        </a>
+      </div>
+    </div>
+
+    <!-- Datos del envío -->
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-info-circle me-2"></i>Datos del Envío</div>
+      <div class="card-body" style="font-size:13px;">
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Carrier</span>
+          <span class="fw-semibold">{{ shipment.carrier }}</span>
+        </div>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Origen</span>
+          <span>{{ shipment.origin or '—' }}</span>
+        </div>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Destino</span>
+          <span>{{ shipment.destination or '—' }}</span>
+        </div>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Destinatario</span>
+          <span>{{ shipment.recipient_name or '—' }}</span>
+        </div>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Fecha envío</span>
+          <span>{{ shipment.ship_date | format_date }}</span>
+        </div>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Entrega estimada</span>
+          <span>{{ shipment.estimated_delivery | format_date }}</span>
+        </div>
+        <div class="d-flex justify-content-between">
+          <span class="text-muted">Entrega real</span>
+          <span>{{ shipment.actual_delivery | format_date }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Enlace DHL -->
+    {% if shipment.carrier == 'DHL' %}
+    <div class="card">
+      <div class="card-body text-center" style="font-size:13px;">
+        <div class="dhl-logo mb-2" style="font-size:20px;">DHL</div>
+        <p class="text-muted mb-2">Rastrear en el sitio oficial de DHL con el número:</p>
+        <code style="color:var(--rts-navy);font-size:13px;">{{ shipment.tracking_number }}</code>
+        <div class="mt-3">
+          <span class="btn btn-sm btn-outline-secondary w-100" onclick="navigator.clipboard.writeText('{{ shipment.tracking_number }}');this.textContent='¡Copiado!'">
+            <i class="bi bi-clipboard me-1"></i>Copiar Tracking #
+          </span>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

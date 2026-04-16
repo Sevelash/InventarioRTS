@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if user else 'Nuevo' }} Usuario — RTS{% endblock %}
+{% block page_title %}{{ 'Editar Usuario' if user else 'Nuevo Usuario' }}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('auth.users_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Cancelar
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <form method="post">
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-person me-2"></i>Datos del Usuario</div>
+        <div class="card-body">
+          <div class="row g-3">
+
+            <div class="col-12">
+              <label class="form-label">Nombre Completo <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" required
+                     value="{{ form.get('name', user.name if user else '') }}"
+                     placeholder="Ej. Juan Pérez">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Usuario <span class="text-danger">*</span></label>
+              <input type="text" name="username" class="form-control" required
+                     value="{{ form.get('username', user.username if user else '') }}"
+                     placeholder="ej. jperez"
+                     style="font-family:monospace;">
+              <div class="form-text">Solo letras, números y puntos. Se guarda en minúsculas.</div>
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Email</label>
+              <input type="email" name="email" class="form-control"
+                     value="{{ form.get('email', user.email if user else '') }}"
+                     placeholder="correo@remoteteamsolutions.com">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">
+                Contraseña
+                {% if not user %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              <input type="password" name="password" class="form-control"
+                     {% if not user %}required{% endif %}
+                     placeholder="{% if user %}Dejar vacío para no cambiar{% else %}Mínimo 6 caracteres{% endif %}"
+                     minlength="6">
+              {% if user %}
+              <div class="form-text">Dejar vacío para mantener la contraseña actual.</div>
+              {% endif %}
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Rol <span class="text-danger">*</span></label>
+              <select name="role" class="form-select" required>
+                <option value="viewer" {% if form.get('role', user.role if user else 'viewer') == 'viewer' %}selected{% endif %}>
+                  Viewer — Solo lectura
+                </option>
+                <option value="admin" {% if form.get('role', user.role if user else '') == 'admin' %}selected{% endif %}>
+                  Admin — Acceso total
+                </option>
+              </select>
+            </div>
+
+            {% if user %}
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="active" id="active"
+                       {% if user.active %}checked{% endif %}>
+                <label class="form-check-label" for="active">Usuario activo</label>
+              </div>
+            </div>
+            {% endif %}
+
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-rts">
+          <i class="bi bi-check-lg me-1"></i>{{ 'Guardar Cambios' if user else 'Crear Usuario' }}
+        </button>
+        <a href="{{ url_for('auth.users_list') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

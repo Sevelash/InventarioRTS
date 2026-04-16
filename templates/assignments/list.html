@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Asignaciones - RTS Asset Management{% endblock %}
+{% block page_title %}Asignaciones{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('assignment_new') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nueva Asignación
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="d-flex align-items-center gap-3">
+      <div class="form-check mb-0">
+        <input class="form-check-input" type="radio" name="active" id="active1" value="1" {% if active_only == '1' %}checked{% endif %}>
+        <label class="form-check-label" for="active1" style="font-size:0.85rem;">Solo activas</label>
+      </div>
+      <div class="form-check mb-0">
+        <input class="form-check-input" type="radio" name="active" id="active0" value="0" {% if active_only == '0' %}checked{% endif %}>
+        <label class="form-check-label" for="active0" style="font-size:0.85rem;">Todas</label>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center py-3">
+    <i class="bi bi-arrow-left-right me-2"></i>
+    {{ assignments|length }} asignación(es)
+    {% if active_only == '1' %}<span class="badge bg-primary ms-2">Activas</span>{% endif %}
+  </div>
+  <div class="card-body p-0">
+    {% if assignments %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">Activo</th>
+            <th>Tag</th>
+            <th>Empleado</th>
+            <th>Departamento</th>
+            <th>Asignado</th>
+            <th>Devuelto</th>
+            <th>Estado</th>
+            <th class="text-end pe-3">Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in assignments %}
+          <tr>
+            <td class="ps-3">
+              <a href="{{ url_for('asset_detail', id=a.asset.id) }}" class="text-decoration-none fw-semibold">
+                {{ a.asset.name }}
+              </a>
+            </td>
+            <td><span class="asset-tag-badge">{{ a.asset.asset_tag }}</span></td>
+            <td>{{ a.employee.name }}</td>
+            <td>{{ a.employee.department or '—' }}</td>
+            <td>{{ a.assigned_date | format_date }}</td>
+            <td>{{ a.returned_date | format_date }}</td>
+            <td>
+              {% if not a.returned_date %}
+                <span class="badge bg-primary">Activa</span>
+              {% else %}
+                <span class="badge bg-secondary">Devuelta</span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-3">
+              {% if not a.returned_date %}
+              <form action="{{ url_for('assignment_return', id=a.id) }}" method="post" class="d-inline"
+                    onsubmit="return confirm('¿Registrar devolución de {{ a.asset.name }}?')">
+                <input type="hidden" name="returned_date" value="{{ today }}">
+                <button type="submit" class="btn btn-sm btn-warning py-0 px-2">
+                  <i class="bi bi-arrow-return-left"></i> Devolver
+                </button>
+              </form>
+              {% else %}
+                <span class="text-muted" style="font-size:0.8rem;">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-arrow-left-right d-block"></i>
+      No hay asignaciones registradas.
+      <div class="mt-2">
+        <a href="{{ url_for('assignment_new') }}" class="btn btn-rts btn-sm">Crear primera asignación</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

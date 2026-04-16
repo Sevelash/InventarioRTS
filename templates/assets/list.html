@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% block title %}Activos - RTS Asset Management{% endblock %}
+{% block page_title %}Activos{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('asset_new', return_url=request.url) }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nuevo Activo
+  </a>
+{% endblock %}
+
+{% block content %}
+
+{# URL base para poder regresar desde edición #}
+{% set current_url = request.url %}
+
+<!-- ── Filtros ────────────────────────────────────────────── -->
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" id="filterForm" class="row g-2 align-items-center">
+
+      <!-- Buscador — siempre preserva el filtro de categoría activo -->
+      <div class="col-sm-4">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" name="q" id="searchInput" class="form-control"
+                 placeholder="Buscar nombre, tag, serial, RAM, proveedor…"
+                 value="{{ q }}" autocomplete="off">
+          {% if q %}
+          <button type="button" class="btn btn-outline-secondary btn-sm"
+                  onclick="document.getElementById('searchInput').value='';document.getElementById('filterForm').submit();">
+            <i class="bi bi-x"></i>
+          </button>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="col-sm-2">
+        <select name="category" class="form-select form-select-sm" id="categorySelect"
+                onchange="this.form.submit()">
+          <option value="">— Categoría —</option>
+          {% for cat in categories %}
+          <option value="{{ cat.id }}"
+            {% if category_filter == cat.id|string %}selected{% endif %}>
+            {{ cat.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-sm-2">
+        <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">— Estado —</option>
+          {% for s, label in STATUS_LABELS.items() %}
+          <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-sm-2">
+        <select name="location_type" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">— Ubicación —</option>
+          <option value="en_sitio" {% if loc_filter == 'en_sitio' %}selected{% endif %}>En Sitio</option>
+          <option value="hibrido"  {% if loc_filter == 'hibrido'  %}selected{% endif %}>Híbrido</option>
+          <option value="foraneo"  {% if loc_filter == 'foraneo'  %}selected{% endif %}>Foráneo</option>
+        </select>
+      </div>
+
+      <div class="col-auto d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-search me-1"></i>Buscar
+        </button>
+        {% if q or status_filter or category_filter or loc_filter %}
+        <a href="{{ url_for('assets_list') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x-circle me-1"></i>Limpiar
+        </a>
+        {% endif %}
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<!-- Chip de contexto — muestra qué categoría está activa -->
+{% if category_filter %}
+  {% for cat in categories %}{% if cat.id|string == category_filter %}
+  <div class="d-flex align-items-center gap-2 mb-2" style="font-size:12.5px;">
+    <i class="bi bi-tag" style="color:var(--rts-blue);"></i>
+    <span>Mostrando categoría: <strong>{{ cat.name }}</strong></span>
+    <a href="{{ url_for('assets_list', q=q, status=status_filter, location_type=loc_filter) }}"
+       class="text-muted" style="font-size:11px;">✕ quitar filtro</a>
+  </div>
+  {% endif %}{% endfor %}
+{% endif %}
+
+<!-- ── Tabla ───────────────────────────────────────────────── -->
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-laptop me-2"></i>{{ assets|length }} activo(s)</span>
+    {% if category_filter %}
+    <span style="font-size:11.5px;color:var(--rts-gray);">
+      <i class="bi bi-funnel me-1"></i>filtrado por categoría
+    </span>
+    {% endif %}
+  </div>
+  <div class="card-body p-0">
+    {% if assets %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" style="font-size:13px;">
+        <thead>
+          <tr>
+            <th class="ps-3" style="width:110px;">ID Activo</th>
+            <th style="width:130px;">Cliente</th>
+            <th style="width:90px;">ID Empleado</th>
+            <th>Nombre Empleado</th>
+            <th>Departamento</th>
+            <th>Equipo</th>
+            <th>RAM</th>
+            <th>Costo (MXN)</th>
+            <th>Proveedor</th>
+            <th>F. Compra</th>
+            <th>Últ. Mant.</th>
+            <th>Ubicación</th>
+            <th>Estado</th>
+            <th class="text-end pe-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for asset in assets %}
+          {% set ca = asset.current_assignment %}
+          <tr>
+            <!-- ID Activo -->
+            <td class="ps-3">
+              <a href="{{ url_for('asset_detail', id=asset.id, return_url=current_url) }}"
+                 class="text-decoration-none">
+                <span class="asset-tag-badge">{{ asset.asset_tag }}</span>
+              </a>
+            </td>
+
+            <!-- Cliente -->
+            <td style="font-size:12.5px;">
+              {% if asset.client %}
+                <i class="bi bi-building me-1" style="color:var(--rts-blue);font-size:11px;"></i>{{ asset.client.name }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <!-- ID Empleado -->
+            <td>
+              {% if ca %}
+                <span class="asset-tag-badge">{{ ca.employee.employee_id }}</span>
+              {% else %}—{% endif %}
+            </td>
+
+            <!-- Nombre Empleado -->
+            <td>
+              {% if ca %}
+                <span class="fw-semibold" style="color:var(--rts-blue);">{{ ca.employee.name }}</span>
+              {% else %}
+                <span class="text-muted" style="font-size:12px;">Sin asignar</span>
+              {% endif %}
+            </td>
+
+            <!-- Departamento -->
+            <td>{{ ca.employee.department if ca and ca.employee.department else '—' }}</td>
+
+            <!-- Equipo (fabricante + modelo) -->
+            <td>
+              <div class="fw-semibold text-navy">{{ asset.name }}</div>
+              {% if asset.manufacturer or asset.model %}
+              <div style="font-size:11.5px;color:var(--rts-gray);">
+                {{ asset.manufacturer or '' }}{% if asset.manufacturer and asset.model %} · {% endif %}{{ asset.model or '' }}
+              </div>
+              {% endif %}
+            </td>
+
+            <!-- RAM -->
+            <td>{{ asset.ram or '—' }}</td>
+
+            <!-- Costo MXN -->
+            <td style="white-space:nowrap;">
+              {% if asset.purchase_cost %}
+                ${{ '{:,.0f}'.format(asset.purchase_cost) }}
+              {% else %}—{% endif %}
+            </td>
+
+            <!-- Proveedor -->
+            <td style="font-size:12.5px;">{{ asset.supplier or '—' }}</td>
+
+            <!-- Fecha Compra -->
+            <td style="white-space:nowrap;">{{ asset.purchase_date | format_date }}</td>
+
+            <!-- Último Mantenimiento -->
+            <td style="white-space:nowrap;">
+              {% if asset.last_maintenance %}
+                {{ asset.last_maintenance | format_date }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <!-- Ubicación -->
+            <td>
+              {{ asset.location or '—' }}
+              {% if asset.location_type == 'foraneo' %}
+                <i class="bi bi-truck ms-1" style="color:#E65100;font-size:11px;" title="Foráneo"></i>
+              {% elif asset.location_type == 'hibrido' %}
+                <i class="bi bi-shuffle ms-1" style="color:#006064;font-size:11px;" title="Híbrido"></i>
+              {% endif %}
+            </td>
+
+            <!-- Estado -->
+            <td>
+              <span class="badge bg-{{ STATUS_BADGES[asset.status] }}">
+                {{ STATUS_LABELS[asset.status] }}
+              </span>
+            </td>
+
+            <!-- Acciones -->
+            <td class="text-end pe-3" style="white-space:nowrap;">
+              <a href="{{ url_for('asset_detail', id=asset.id, return_url=current_url) }}"
+                 class="btn btn-sm btn-outline-primary py-0 px-2" title="Ver">
+                <i class="bi bi-eye"></i>
+              </a>
+              <a href="{{ url_for('asset_edit', id=asset.id, return_url=current_url) }}"
+                 class="btn btn-sm btn-outline-secondary py-0 px-2" title="Editar">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form action="{{ url_for('asset_delete', id=asset.id) }}" method="post"
+                    class="d-inline"
+                    onsubmit="return confirm('¿Eliminar {{ asset.name }}?')">
+                <button class="btn btn-sm btn-outline-danger py-0 px-2" title="Eliminar">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-laptop"></i>
+      <p>No se encontraron activos{% if q %} para "<strong>{{ q }}</strong>"{% endif %}.</p>
+      {% if q or status_filter or category_filter %}
+      <a href="{{ url_for('assets_list') }}" class="btn btn-outline-secondary btn-sm">Quitar filtros</a>
+      {% else %}
+      <a href="{{ url_for('asset_new') }}" class="btn btn-rts btn-sm">Agregar primer activo</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Al presionar Enter en el buscador, preserva el filtro de categoría actual
+  document.getElementById('searchInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('filterForm').submit();
+    }
+  });
+</script>
+{% endblock %}

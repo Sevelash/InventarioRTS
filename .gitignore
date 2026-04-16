@@ -1,0 +1,53 @@
+# Base de datos (cada entorno tiene la suya)
+instance/
+*.db
+*.sqlite3
+
+# Imágenes subidas (branding — no van al repo, se copian manualmente)
+static/images/logo.png
+static/images/remoties.png
+static/images/favicon.png
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Entornos virtuales
+venv/
+env/
+.venv/
+.env/
+
+# Variables de entorno
+.env
+.env.local
+.env.production
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Archivos temporales de importación
+*.xlsx
+*.csv

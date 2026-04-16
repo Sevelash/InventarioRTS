@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Empleados - RTS Asset Management{% endblock %}
+{% block page_title %}Empleados{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('employee_new') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-person-plus me-1"></i>Nuevo Empleado
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-sm-5">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" name="q" class="form-control" placeholder="Buscar nombre, ID, depto, email..." value="{{ q }}">
+        </div>
+      </div>
+      <div class="col-auto">
+        <div class="form-check form-check-inline mb-0">
+          <input class="form-check-input" type="checkbox" name="inactive" id="inactive" value="1" {% if show_inactive %}checked{% endif %}>
+          <label class="form-check-label" for="inactive" style="font-size:0.85rem;">Mostrar inactivos</label>
+        </div>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
+        <a href="{{ url_for('employees_list') }}" class="btn btn-outline-secondary btn-sm">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between py-3">
+    <span><i class="bi bi-people me-2"></i>{{ employees|length }} empleado(s)</span>
+  </div>
+  <div class="card-body p-0">
+    {% if employees %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">ID Empleado</th>
+            <th>Nombre</th>
+            <th>Departamento</th>
+            <th>Email</th>
+            <th>Teléfono</th>
+            <th>Activos Asignados</th>
+            <th>Estado</th>
+            <th class="text-end pe-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for emp in employees %}
+          <tr>
+            <td class="ps-3"><span class="asset-tag-badge">{{ emp.employee_id }}</span></td>
+            <td class="fw-semibold">{{ emp.name }}</td>
+            <td>{{ emp.department or '—' }}</td>
+            <td>{{ emp.email or '—' }}</td>
+            <td>{{ emp.phone or '—' }}</td>
+            <td>
+              {% set count = emp.current_assets|length %}
+              {% if count > 0 %}
+                <span class="badge bg-primary">{{ count }}</span>
+              {% else %}
+                <span class="text-muted">0</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if emp.active %}
+                <span class="badge bg-success">Activo</span>
+              {% else %}
+                <span class="badge bg-secondary">Inactivo</span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-3">
+              <a href="{{ url_for('employee_edit', id=emp.id) }}" class="btn btn-sm btn-outline-secondary py-0 px-2">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form action="{{ url_for('employee_delete', id=emp.id) }}" method="post" class="d-inline"
+                    onsubmit="return confirm('¿Eliminar empleado {{ emp.name }}?')">
+                <button class="btn btn-sm btn-outline-danger py-0 px-2"><i class="bi bi-trash"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-people d-block"></i>
+      No se encontraron empleados.
+      <div class="mt-2">
+        <a href="{{ url_for('employee_new') }}" class="btn btn-rts btn-sm">Agregar primer empleado</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
