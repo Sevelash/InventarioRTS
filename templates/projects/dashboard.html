@@ -5,7 +5,7 @@
 
 {% block topbar_actions %}
   <a href="{{ url_for('projects.project_new') }}" class="btn btn-rts btn-sm">
-    <i class="bi bi-plus-lg me-1"></i>Nuevo Proyecto
+    <i class="bi bi-plus-lg me-1"></i>{{ T.proj_new_project }}
   </a>
 {% endblock %}
 
@@ -21,7 +21,7 @@
       </div>
       <div>
         <div class="stat-value">{{ total }}</div>
-        <div class="stat-label">Total Proyectos</div>
+        <div class="stat-label">{{ T.proj_total }}</div>
       </div>
     </div>
   </div>
@@ -33,7 +33,7 @@
       </div>
       <div>
         <div class="stat-value" style="color:var(--rts-blue);">{{ active }}</div>
-        <div class="stat-label">Activos</div>
+        <div class="stat-label">{{ T.proj_active_kpi }}</div>
       </div>
     </div>
   </div>
@@ -45,7 +45,7 @@
       </div>
       <div>
         <div class="stat-value" style="color:#28A745;">{{ completed }}</div>
-        <div class="stat-label">Completados</div>
+        <div class="stat-label">{{ T.proj_completed_kpi }}</div>
       </div>
     </div>
   </div>
@@ -57,7 +57,7 @@
       </div>
       <div>
         <div class="stat-value" style="color:#FFA000;">{{ on_hold }}</div>
-        <div class="stat-label">En Pausa</div>
+        <div class="stat-label">{{ T.proj_on_hold_kpi }}</div>
       </div>
     </div>
   </div>
@@ -69,7 +69,7 @@
       </div>
       <div>
         <div class="stat-value" style="color:#DC3545;">{{ overdue }}</div>
-        <div class="stat-label">Vencidos</div>
+        <div class="stat-label">{{ T.proj_overdue }}</div>
       </div>
     </div>
   </div>
@@ -81,7 +81,7 @@
       </div>
       <div>
         <div class="stat-value" style="color:#6F42C1;">{{ total_tasks }}</div>
-        <div class="stat-label">Total Tareas</div>
+        <div class="stat-label">{{ T.proj_total_tasks }}</div>
       </div>
     </div>
   </div>
@@ -95,9 +95,9 @@
   <div class="col-lg-7">
     <div class="card h-100">
       <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-clock-history me-2"></i>Proyectos Recientes</span>
+        <span><i class="bi bi-clock-history me-2"></i>{{ T.proj_recent }}</span>
         <a href="{{ url_for('projects.project_list') }}" class="btn btn-outline-secondary btn-sm">
-          Ver todos <i class="bi bi-arrow-right ms-1"></i>
+          {{ T.btn_view_all }} <i class="bi bi-arrow-right ms-1"></i>
         </a>
       </div>
       <div class="card-body p-0">
@@ -163,7 +163,7 @@
 
     <!-- Status donut summary -->
     <div class="card mb-4">
-      <div class="card-header"><i class="bi bi-pie-chart me-2"></i>Proyectos por Estado</div>
+      <div class="card-header"><i class="bi bi-pie-chart me-2"></i>{{ T.proj_by_status }}</div>
       <div class="card-body">
         <canvas id="statusChart" height="180"></canvas>
       </div>
@@ -171,7 +171,7 @@
 
     <!-- My pending tasks -->
     <div class="card">
-      <div class="card-header"><i class="bi bi-person-check me-2"></i>Mis Tareas Pendientes</div>
+      <div class="card-header"><i class="bi bi-person-check me-2"></i>{{ T.proj_my_tasks }}</div>
       {% if my_tasks %}
       <ul class="list-group list-group-flush">
         {% for t in my_tasks %}
@@ -211,31 +211,31 @@
 <div class="row g-3 mt-2">
   <div class="col-12">
     <div class="card">
-      <div class="card-header"><i class="bi bi-bar-chart me-2"></i>Resumen de Tareas</div>
+      <div class="card-header"><i class="bi bi-bar-chart me-2"></i>{{ T.proj_task_summary }}</div>
       <div class="card-body">
         <div class="row g-3">
           <div class="col-6 col-md-3">
             <div class="text-center">
               <div style="font-family:'Oswald',sans-serif;font-size:2rem;font-weight:600;color:var(--rts-navy);">{{ total_tasks }}</div>
-              <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.04em;">Total Tareas</div>
+              <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.04em;">{{ T.proj_total_tasks }}</div>
             </div>
           </div>
           <div class="col-6 col-md-3">
             <div class="text-center">
               <div style="font-family:'Oswald',sans-serif;font-size:2rem;font-weight:600;color:#28A745;">{{ done_tasks }}</div>
-              <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.04em;">Completadas</div>
+              <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.04em;">{{ T.proj_done_tasks }}</div>
             </div>
           </div>
           <div class="col-6 col-md-3">
             <div class="text-center">
               <div style="font-family:'Oswald',sans-serif;font-size:2rem;font-weight:600;color:var(--rts-blue);">{{ pending_tasks }}</div>
-              <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.04em;">En Progreso / Pendientes</div>
+              <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.04em;">{{ T.proj_pending_tasks }}</div>
             </div>
           </div>
           <div class="col-6 col-md-3">
             <div class="text-center">
               <div style="font-family:'Oswald',sans-serif;font-size:2rem;font-weight:600;color:#DC3545;">{{ overdue_tasks }}</div>
-              <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.04em;">Tareas Vencidas</div>
+              <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.04em;">{{ T.proj_overdue_tasks }}</div>
             </div>
           </div>
         </div>

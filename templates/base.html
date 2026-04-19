@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="{{ lang }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}RTS Asset Management{% endblock %}</title>
 
-  <!-- Google Fonts: Oswald (titles) -->
+  <!-- Google Fonts: Oswald -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20,18 +20,18 @@
 <body>
 
 <!-- ── Sidebar ─────────────────────────────────────────────── -->
-<nav class="sidebar">
+<nav class="sidebar" id="sidebar">
   <a href="{{ url_for('portal') }}" class="sidebar-brand">
     {% if logo_exists %}
       <img src="{{ url_for('static', filename='images/logo.png') }}"
-           alt="Remote Team Solutions" style="width:130px; filter:brightness(0) invert(1);">
+           alt="Remote Team Solutions" style="width:130px;filter:brightness(0) invert(1);">
     {% else %}
     <div style="display:flex;align-items:center;gap:8px;">
       <svg viewBox="0 0 50 40" xmlns="http://www.w3.org/2000/svg" width="36" height="29" style="flex-shrink:0;">
         <polyline points="4,8 20,26 13,34" fill="none" stroke="#233C6E" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
         <polyline points="13,34 36,8" fill="none" stroke="#089ACF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <div class="brand-text">
+      <div class="brand-text sidebar-text">
         <span style="color:#fff;font-family:'Oswald',sans-serif;font-size:13px;font-weight:600;letter-spacing:.04em;">REMOTE <span style="color:#6EC1E4;">TEAM</span></span>
         <div class="brand-sub">SOLUTIONS · Intranet</div>
       </div>
@@ -39,120 +39,149 @@
     {% endif %}
   </a>
 
-  <!-- Portal -->
-  <div class="nav-section">Portal</div>
+  <!-- ── Portal ── -->
+  <div class="nav-section sidebar-text">{{ T.nav_portal }}</div>
   <a href="{{ url_for('portal') }}"
-     class="nav-link {% if request.endpoint == 'portal' %}active{% endif %}">
-    <i class="bi bi-grid-1x2"></i> Inicio
+     class="nav-link {% if request.endpoint == 'portal' %}active{% endif %}"
+     title="{{ T.nav_home }}">
+    <i class="bi bi-grid-1x2"></i>
+    <span class="sidebar-text">{{ T.nav_home }}</span>
   </a>
 
-  {# ── Module-based sections ── shown if user has access #}
   {% set user_modules = current_user.get('modules', []) if current_user else [] %}
   {% set is_admin = current_user and current_user.role == 'admin' %}
 
   {# ── INVENTORY ── #}
   {% if is_admin or 'inventory' in user_modules %}
-  <div class="nav-section">Inventario</div>
+  <div class="nav-section sidebar-text">{{ T.nav_inventory }}</div>
   <a href="{{ url_for('inventory_dashboard') }}"
-     class="nav-link {% if request.endpoint == 'inventory_dashboard' %}active{% endif %}">
-    <i class="bi bi-speedometer2"></i> Dashboard
+     class="nav-link {% if request.endpoint == 'inventory_dashboard' %}active{% endif %}"
+     title="{{ T.nav_dashboard }}">
+    <i class="bi bi-speedometer2"></i>
+    <span class="sidebar-text">{{ T.nav_dashboard }}</span>
   </a>
   <a href="{{ url_for('assets_list') }}"
-     class="nav-link {% if 'asset' in (request.endpoint or '') %}active{% endif %}">
-    <i class="bi bi-laptop"></i> Activos
+     class="nav-link {% if 'asset' in (request.endpoint or '') %}active{% endif %}"
+     title="{{ T.nav_assets }}">
+    <i class="bi bi-laptop"></i>
+    <span class="sidebar-text">{{ T.nav_assets }}</span>
   </a>
   <a href="{{ url_for('categories_list') }}"
-     class="nav-link {% if 'categor' in (request.endpoint or '') %}active{% endif %}">
-    <i class="bi bi-tag"></i> Categorías
+     class="nav-link {% if 'categor' in (request.endpoint or '') %}active{% endif %}"
+     title="{{ T.nav_categories }}">
+    <i class="bi bi-tag"></i>
+    <span class="sidebar-text">{{ T.nav_categories }}</span>
   </a>
   <a href="{{ url_for('clients_list') }}"
-     class="nav-link {% if 'client' in (request.endpoint or '') %}active{% endif %}">
-    <i class="bi bi-building"></i> Clientes
+     class="nav-link {% if 'client' in (request.endpoint or '') %}active{% endif %}"
+     title="{{ T.nav_clients }}">
+    <i class="bi bi-building"></i>
+    <span class="sidebar-text">{{ T.nav_clients }}</span>
   </a>
   <a href="{{ url_for('employees_list') }}"
-     class="nav-link {% if 'employee' in (request.endpoint or '') %}active{% endif %}">
-    <i class="bi bi-people"></i> Empleados
+     class="nav-link {% if 'employee' in (request.endpoint or '') %}active{% endif %}"
+     title="{{ T.nav_employees }}">
+    <i class="bi bi-people"></i>
+    <span class="sidebar-text">{{ T.nav_employees }}</span>
   </a>
   <a href="{{ url_for('assignments_list') }}"
-     class="nav-link {% if 'assignment' in (request.endpoint or '') %}active{% endif %}">
-    <i class="bi bi-arrow-left-right"></i> Asignaciones
+     class="nav-link {% if 'assignment' in (request.endpoint or '') %}active{% endif %}"
+     title="{{ T.nav_assignments }}">
+    <i class="bi bi-arrow-left-right"></i>
+    <span class="sidebar-text">{{ T.nav_assignments }}</span>
   </a>
   <a href="{{ url_for('shipments_list') }}"
-     class="nav-link {% if 'shipment' in (request.endpoint or '') %}active{% endif %}">
-    <i class="bi bi-truck"></i> Envíos DHL
+     class="nav-link {% if 'shipment' in (request.endpoint or '') %}active{% endif %}"
+     title="{{ T.nav_shipments }}">
+    <i class="bi bi-truck"></i>
+    <span class="sidebar-text">{{ T.nav_shipments }}</span>
   </a>
   {% endif %}
 
   {# ── PROJECTS ── #}
   {% if is_admin or 'projects' in user_modules %}
-  <div class="nav-section">Proyectos</div>
+  <div class="nav-section sidebar-text">{{ T.nav_projects }}</div>
   <a href="{{ url_for('projects.dashboard') }}"
-     class="nav-link {% if request.endpoint == 'projects.dashboard' %}active{% endif %}">
-    <i class="bi bi-speedometer2"></i> Dashboard
+     class="nav-link {% if request.endpoint == 'projects.dashboard' %}active{% endif %}"
+     title="{{ T.nav_dashboard }}">
+    <i class="bi bi-speedometer2"></i>
+    <span class="sidebar-text">{{ T.nav_dashboard }}</span>
   </a>
   <a href="{{ url_for('projects.project_list') }}"
-     class="nav-link {% if request.endpoint in ('projects.project_list','projects.project_detail','projects.project_new','projects.project_edit') %}active{% endif %}">
-    <i class="bi bi-kanban"></i> Proyectos
+     class="nav-link {% if request.endpoint in ('projects.project_list','projects.project_detail','projects.project_new','projects.project_edit') %}active{% endif %}"
+     title="{{ T.nav_all_projects }}">
+    <i class="bi bi-kanban"></i>
+    <span class="sidebar-text">{{ T.nav_all_projects }}</span>
   </a>
   {% endif %}
 
   {# ── EVALUATION ── #}
   {% if is_admin or 'evaluation' in user_modules %}
-  <div class="nav-section">Evaluación</div>
+  <div class="nav-section sidebar-text">{{ T.nav_evaluation }}</div>
   <a href="{{ url_for('eval.index') }}"
-     class="nav-link {% if request.blueprint == 'eval' %}active{% endif %}">
-    <i class="bi bi-clipboard-check"></i> Evaluaciones
+     class="nav-link {% if request.blueprint == 'eval' %}active{% endif %}"
+     title="{{ T.nav_eval }}">
+    <i class="bi bi-clipboard-check"></i>
+    <span class="sidebar-text">{{ T.nav_eval }}</span>
   </a>
   {% endif %}
 
   {# ── REPOSITORY ── #}
   {% if is_admin or 'repository' in user_modules %}
-  <div class="nav-section">Repositorio</div>
+  <div class="nav-section sidebar-text">{{ T.nav_repository }}</div>
   <a href="{{ url_for('repo.index') }}"
-     class="nav-link {% if request.blueprint == 'repo' %}active{% endif %}">
-    <i class="bi bi-folder2-open"></i> Repositorio
+     class="nav-link {% if request.blueprint == 'repo' %}active{% endif %}"
+     title="{{ T.nav_repo }}">
+    <i class="bi bi-folder2-open"></i>
+    <span class="sidebar-text">{{ T.nav_repo }}</span>
   </a>
   {% endif %}
 
   {# ── ADMIN ── #}
   {% if current_user and current_user.role == 'admin' %}
-  <div class="nav-section">Administración</div>
+  <div class="nav-section sidebar-text">{{ T.nav_admin }}</div>
   <a href="{{ url_for('admin.index') }}"
-     class="nav-link {% if request.endpoint and request.endpoint.startswith('admin.') and request.endpoint != 'admin.logs' %}active{% endif %}">
-    <i class="bi bi-shield-lock"></i> Panel Admin
+     class="nav-link {% if request.endpoint and request.endpoint.startswith('admin.') and request.endpoint != 'admin.logs' %}active{% endif %}"
+     title="{{ T.nav_admin_panel }}">
+    <i class="bi bi-shield-lock"></i>
+    <span class="sidebar-text">{{ T.nav_admin_panel }}</span>
   </a>
   <a href="{{ url_for('admin.logs') }}"
-     class="nav-link {% if request.endpoint == 'admin.logs' %}active{% endif %}">
-    <i class="bi bi-journal-text"></i> Logs
+     class="nav-link {% if request.endpoint == 'admin.logs' %}active{% endif %}"
+     title="{{ T.nav_logs }}">
+    <i class="bi bi-journal-text"></i>
+    <span class="sidebar-text">{{ T.nav_logs }}</span>
   </a>
   {% endif %}
 
-  <!-- Remoties al fondo del sidebar -->
+  <!-- Sidebar footer -->
   <div class="sidebar-footer">
-    {% if remoties_exists %}
-      <img src="{{ url_for('static', filename='images/remoties.png') }}" alt="Remoties" style="width:36px;margin-bottom:8px;display:block;margin-left:auto;margin-right:auto;opacity:.85;">
-    {% else %}
-      <span style="font-size:24px;display:block;text-align:center;margin-bottom:6px;">😄</span>
-    {% endif %}
-
-    <div style="font-size:10px;color:rgba(255,255,255,.45);line-height:1.6;text-align:center;">
-      &copy; 2026 Remote Team Solutions.<br>
-      All rights reserved.<br>
-      <a href="https://remoteteamsolutions.com/privacy-policy/"
-         target="_blank" rel="noopener"
-         style="color:rgba(110,193,228,.8);text-decoration:underline;text-underline-offset:2px;">
-        Privacy Policy
-      </a>
-    </div>
-
-    <div style="margin-top:7px;font-size:10px;color:rgba(255,255,255,.28);text-align:center;font-style:italic;line-height:1.5;">
-      Developed by the IT Team
+    <div class="sidebar-text">
+      {% if remoties_exists %}
+        <img src="{{ url_for('static', filename='images/remoties.png') }}" alt="Remoties"
+             style="width:36px;margin-bottom:8px;display:block;margin-left:auto;margin-right:auto;opacity:.85;">
+      {% else %}
+        <span style="font-size:24px;display:block;text-align:center;margin-bottom:6px;">😄</span>
+      {% endif %}
+      <div style="font-size:10px;color:rgba(255,255,255,.45);line-height:1.6;text-align:center;">
+        &copy; 2026 Remote Team Solutions.<br>All rights reserved.<br>
+        <a href="https://remoteteamsolutions.com/privacy-policy/" target="_blank" rel="noopener"
+           style="color:rgba(110,193,228,.8);text-decoration:underline;text-underline-offset:2px;">Privacy Policy</a>
+      </div>
+      <div style="margin-top:7px;font-size:10px;color:rgba(255,255,255,.28);text-align:center;font-style:italic;">
+        Developed by the IT Team
+      </div>
     </div>
   </div>
 </nav>
 
+<!-- ── Sidebar toggle tab ──────────────────────────────────── -->
+<button class="sidebar-toggle-tab" id="sidebarToggle" aria-label="Toggle sidebar">
+  <i class="bi bi-chevron-left" id="sidebarToggleIcon"></i>
+</button>
+
 <!-- ── Main Content ────────────────────────────────────────── -->
-<div class="main-content">
+<div class="main-content" id="mainContent">
 
   <!-- Top bar -->
   <div class="topbar">
@@ -160,7 +189,17 @@
     <div class="ms-auto d-flex gap-2 align-items-center">
       {% block topbar_actions %}{% endblock %}
 
-      <!-- Usuario logueado -->
+      <!-- Language switcher -->
+      {% if current_user %}
+      <a href="{{ url_for('set_lang', code=other_lang) }}"
+         class="btn btn-sm btn-outline-secondary"
+         title="{{ T.lang_switch_title }}"
+         style="font-size:11.5px;font-weight:700;min-width:34px;padding:3px 8px;letter-spacing:.04em;">
+        {{ T.lang_switch_label }}
+      </a>
+      {% endif %}
+
+      <!-- User dropdown -->
       {% if current_user %}
       <div class="dropdown">
         <button class="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-2"
@@ -171,24 +210,26 @@
           </span>
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
-          <li><span class="dropdown-item-text" style="font-size:11.5px;color:#888;">{{ current_user.email or current_user.name }}</span></li>
+          <li><span class="dropdown-item-text" style="font-size:11.5px;color:#888;">
+            {{ current_user.email or current_user.name }}
+          </span></li>
           {% if current_user.role == 'admin' %}
           <li><hr class="dropdown-divider"></li>
           <li>
             <a class="dropdown-item" href="{{ url_for('admin.index') }}">
-              <i class="bi bi-shield-lock me-2"></i>Panel Admin
+              <i class="bi bi-shield-lock me-2"></i>{{ T.nav_admin_panel }}
             </a>
           </li>
           <li>
             <a class="dropdown-item" href="{{ url_for('admin.logs') }}">
-              <i class="bi bi-journal-text me-2"></i>Logs del Sistema
+              <i class="bi bi-journal-text me-2"></i>{{ T.nav_logs }}
             </a>
           </li>
           {% endif %}
           <li><hr class="dropdown-divider"></li>
           <li>
             <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
-              <i class="bi bi-box-arrow-right me-2"></i>Cerrar Sesión
+              <i class="bi bi-box-arrow-right me-2"></i>{{ T.user_signout }}
             </a>
           </li>
         </ul>
@@ -220,6 +261,49 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- ── Sidebar collapse logic ─────────────────────────────── -->
+<script>
+(function () {
+  const STORAGE_KEY = 'rts_sidebar_collapsed';
+  const sidebar   = document.getElementById('sidebar');
+  const mainContent = document.getElementById('mainContent');
+  const toggleBtn = document.getElementById('sidebarToggle');
+  const toggleIcon = document.getElementById('sidebarToggleIcon');
+
+  function applyCollapsed(collapsed, animate) {
+    if (!animate) {
+      sidebar.style.transition    = 'none';
+      mainContent.style.transition = 'none';
+      toggleBtn.style.transition  = 'none';
+    }
+    if (collapsed) {
+      document.body.classList.add('sidebar-collapsed');
+    } else {
+      document.body.classList.remove('sidebar-collapsed');
+    }
+    if (!animate) {
+      // re-enable after paint
+      requestAnimationFrame(() => {
+        sidebar.style.transition    = '';
+        mainContent.style.transition = '';
+        toggleBtn.style.transition  = '';
+      });
+    }
+  }
+
+  // Restore saved state without animation
+  const saved = localStorage.getItem(STORAGE_KEY) === '1';
+  applyCollapsed(saved, false);
+
+  toggleBtn.addEventListener('click', () => {
+    const nowCollapsed = !document.body.classList.contains('sidebar-collapsed');
+    applyCollapsed(nowCollapsed, true);
+    localStorage.setItem(STORAGE_KEY, nowCollapsed ? '1' : '0');
+  });
+})();
+</script>
+
 {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action, ALL_MODULES
 from datetime import datetime, date
+from i18n import get_translations, SUPPORTED_LANGS, DEFAULT_LANG
 import os
 
 app = Flask(__name__)
@@ -781,14 +782,27 @@ def format_currency(value):
     return f'${value:,.2f} MXN'
 
 
+@app.route('/lang/<code>')
+@login_required
+def set_lang(code):
+    if code in SUPPORTED_LANGS:
+        session['lang'] = code
+    return redirect(request.referrer or url_for('portal'))
+
+
 @app.context_processor
 def inject_globals():
+    lang = session.get('lang', DEFAULT_LANG)
+    other_lang = 'es' if lang == 'en' else 'en'
     return {
         'today': date.today(),
         'current_user': session.get('user'),
         'logo_exists': _img_exists('logo.png'),
         'remoties_exists': _img_exists('remoties.png'),
         'ALL_MODULES': ALL_MODULES,
+        'T': get_translations(lang),
+        'lang': lang,
+        'other_lang': other_lang,
         'STATUS_BADGES': {
             'available':   'success',
             'in_use':      'primary',

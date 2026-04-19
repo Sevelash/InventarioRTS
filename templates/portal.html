@@ -6,10 +6,10 @@
 {% block content %}
 <div class="portal-welcome mb-4">
   <h2 style="font-family:'Oswald',sans-serif;font-size:22px;color:var(--rts-navy);font-weight:500;margin:0 0 4px;">
-    ¡Bienvenido, {{ current_user.name }}! 👋
+    {{ T.portal_welcome }}, {{ current_user.name }}! 👋
   </h2>
   <p style="font-family:'Aptos','Calibri',sans-serif;font-size:13.5px;color:var(--rts-gray);margin:0;">
-    Selecciona un módulo para continuar.
+    {{ T.portal_subtitle }}
   </p>
 </div>
 
@@ -22,8 +22,8 @@
         <i class="bi {{ mod.icon }}"></i>
       </div>
       <div class="module-card-body">
-        <div class="module-card-name">{{ mod.name }}</div>
-        <div class="module-card-desc">{{ mod.desc }}</div>
+        <div class="module-card-name">{{ T['mod_' + mod.slug + '_name'] if ('mod_' + mod.slug + '_name') in T else mod.name }}</div>
+        <div class="module-card-desc">{{ T['mod_' + mod.slug + '_desc'] if ('mod_' + mod.slug + '_desc') in T else mod.desc }}</div>
       </div>
       <div class="module-card-arrow">
         <i class="bi bi-arrow-right-circle-fill"></i>
@@ -36,26 +36,25 @@
 {% else %}
 <div class="empty-state" style="padding:80px 24px;">
   <i class="bi bi-lock" style="font-size:3.5rem;opacity:.2;display:block;margin-bottom:14px;color:var(--rts-navy);"></i>
-  <p style="font-size:15px;color:var(--rts-gray);margin-bottom:6px;font-weight:600;">Sin módulos asignados</p>
-  <p style="font-size:13px;color:var(--rts-gray);">Contacta al administrador para que te asigne acceso a los módulos correspondientes.</p>
+  <p style="font-size:15px;color:var(--rts-gray);margin-bottom:6px;font-weight:600;">{{ T.portal_no_modules }}</p>
+  <p style="font-size:13px;color:var(--rts-gray);">{{ T.portal_no_modules_sub }}</p>
 </div>
 {% endif %}
 
 {% if current_user.role == 'admin' %}
-<!-- Quick admin strip -->
 <div class="mt-5 pt-4" style="border-top:1px solid var(--rts-border);">
   <p style="font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--rts-gray);margin-bottom:12px;font-weight:700;">
-    <i class="bi bi-shield-lock me-1"></i>Acceso rápido · Administración
+    <i class="bi bi-shield-lock me-1"></i>{{ T.portal_quick_admin }}
   </p>
   <div class="d-flex flex-wrap gap-2">
     <a href="{{ url_for('admin.index') }}" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-gear me-1"></i>Panel Admin
+      <i class="bi bi-gear me-1"></i>{{ T.portal_admin_panel }}
     </a>
     <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-people me-1"></i>Usuarios
+      <i class="bi bi-people me-1"></i>{{ T.portal_users }}
     </a>
     <a href="{{ url_for('admin.logs') }}" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-journal-text me-1"></i>Logs
+      <i class="bi bi-journal-text me-1"></i>{{ T.nav_logs }}
     </a>
   </div>
 </div>

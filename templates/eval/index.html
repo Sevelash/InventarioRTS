@@ -1,23 +1,22 @@
 {% extends "base.html" %}
-
 {% block title %}Evaluation — RTS{% endblock %}
-{% block page_title %}Evaluation{% endblock %}
+{% block page_title %}{{ T.nav_eval }}{% endblock %}
 
 {% block content %}
 <div class="module-coming-soon">
   <div class="module-coming-soon-icon" style="background:rgba(40,167,69,.1);color:#28A745;">
     <i class="bi bi-clipboard-check"></i>
   </div>
-  <h2>Módulo de Evaluación</h2>
-  <p>Este módulo está en construcción. Próximamente podrás gestionar evaluaciones de desempeño y registros de revisión del equipo.</p>
+  <h2>{{ T.coming_soon_eval_title }}</h2>
+  <p>{{ T.coming_soon_eval_desc }}</p>
   <div class="module-coming-soon-features">
-    <div class="feature-item"><i class="bi bi-check-circle text-success me-2"></i>Evaluaciones 360°</div>
-    <div class="feature-item"><i class="bi bi-check-circle text-success me-2"></i>Registro de KPIs por empleado</div>
-    <div class="feature-item"><i class="bi bi-check-circle text-success me-2"></i>Historial de revisiones</div>
-    <div class="feature-item"><i class="bi bi-check-circle text-success me-2"></i>Reportes y exportación</div>
+    <div class="feature-item"><i class="bi bi-check-circle text-success me-2"></i>360° Evaluations</div>
+    <div class="feature-item"><i class="bi bi-check-circle text-success me-2"></i>Employee KPI tracking</div>
+    <div class="feature-item"><i class="bi bi-check-circle text-success me-2"></i>Review history</div>
+    <div class="feature-item"><i class="bi bi-check-circle text-success me-2"></i>Reports & export</div>
   </div>
   <a href="{{ url_for('portal') }}" class="btn btn-outline-secondary mt-3">
-    <i class="bi bi-arrow-left me-1"></i>Volver al Portal
+    <i class="bi bi-arrow-left me-1"></i>{{ T.coming_soon_back }}
   </a>
 </div>
 {% endblock %}
