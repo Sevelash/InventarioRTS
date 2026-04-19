@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Proyectos — RTS{% endblock %}
+{% block page_title %}Proyectos{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('projects.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-speedometer2 me-1"></i>Dashboard
+  </a>
+  <a href="{{ url_for('projects.project_new') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nuevo Proyecto
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filters -->
+<form method="get" class="card mb-4">
+  <div class="card-body py-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-4">
+        <label class="form-label mb-1" style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);">Buscar</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" name="q" value="{{ q }}" class="form-control"
+                 placeholder="Nombre, código, descripción…">
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label mb-1" style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);">Estado</label>
+        <select name="status" class="form-select">
+          <option value="">Todos</option>
+          {% for s in ['planning','active','on_hold','completed','cancelled'] %}
+          <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>
+            {{ PROJECT_STATUS_LABELS[s] }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label mb-1" style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);">Prioridad</label>
+        <select name="priority" class="form-select">
+          <option value="">Todas</option>
+          {% for p in ['low','medium','high','critical'] %}
+          <option value="{{ p }}" {% if priority_filter == p %}selected{% endif %}>
+            {{ PRIORITY_LABELS[p] }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label mb-1" style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);">Cliente</label>
+        <select name="client_id" class="form-select">
+          <option value="">Todos</option>
+          {% for c in clients %}
+          <option value="{{ c.id }}" {% if client_filter == c.id|string %}selected{% endif %}>
+            {{ c.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-rts w-100">Filtrar</button>
+        {% if q or status_filter or priority_filter or client_filter %}
+        <a href="{{ url_for('projects.project_list') }}" class="btn btn-outline-secondary" title="Limpiar">
+          <i class="bi bi-x-lg"></i>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</form>
+
+<!-- Count -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <span style="font-size:12.5px;color:var(--rts-gray);">
+    {{ projects|length }} proyecto{{ 's' if projects|length != 1 }} encontrado{{ 's' if projects|length != 1 }}
+  </span>
+</div>
+
+{% if projects %}
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Proyecto</th>
+          <th>Cliente</th>
+          <th>Estado</th>
+          <th>Prioridad</th>
+          <th>Progreso</th>
+          <th>Fecha Fin</th>
+          <th>Tareas</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in projects %}
+        <tr>
+          <td>
+            <span style="font-family:monospace;font-size:12px;color:var(--rts-gray);">{{ p.code }}</span>
+          </td>
+          <td>
+            <a href="{{ url_for('projects.project_detail', id=p.id) }}"
+               style="font-weight:600;color:var(--rts-navy);text-decoration:none;font-size:13.5px;">
+              {{ p.name }}
+            </a>
+            {% if p.description %}
+            <div style="font-size:11.5px;color:var(--rts-gray);">{{ p.description[:60] }}{% if p.description|length > 60 %}…{% endif %}</div>
+            {% endif %}
+          </td>
+          <td style="font-size:12.5px;">{{ p.client.name if p.client else '—' }}</td>
+          <td>
+            <span class="badge bg-{{ PROJECT_STATUS_BADGES[p.status] }}">
+              {{ PROJECT_STATUS_LABELS[p.status] }}
+            </span>
+          </td>
+          <td>
+            <span class="badge bg-{{ PRIORITY_BADGES[p.priority] }}">
+              {{ PRIORITY_LABELS[p.priority] }}
+            </span>
+          </td>
+          <td style="min-width:90px;">
+            <div class="progress" style="height:6px;">
+              <div class="progress-bar" style="width:{{ p.progress }}%;"></div>
+            </div>
+            <div style="font-size:10px;color:var(--rts-gray);margin-top:2px;">{{ p.progress }}%</div>
+          </td>
+          <td style="font-size:12.5px;{% if p.is_overdue %}color:#DC3545;font-weight:600;{% endif %}">
+            {% if p.end_date %}
+              {% if p.is_overdue %}<i class="bi bi-exclamation-triangle me-1"></i>{% endif %}
+              {{ p.end_date.strftime('%d/%m/%Y') }}
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% set open_t = p.open_tasks|length %}
+            {% set done_t = p.done_tasks|length %}
+            <span style="font-size:12px;">
+              <span style="color:#28A745;font-weight:600;">{{ done_t }}</span>
+              <span style="color:var(--rts-gray);">/{{ p.tasks|length }}</span>
+            </span>
+          </td>
+          <td class="text-end">
+            <a href="{{ url_for('projects.project_detail', id=p.id) }}"
+               class="btn btn-sm btn-outline-secondary" title="Ver detalle">
+              <i class="bi bi-eye"></i>
+            </a>
+            <a href="{{ url_for('projects.project_edit', id=p.id) }}"
+               class="btn btn-sm btn-outline-secondary ms-1" title="Editar">
+              <i class="bi bi-pencil"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% else %}
+<div class="empty-state">
+  <i class="bi bi-kanban"></i>
+  <p>No se encontraron proyectos con los filtros actuales.</p>
+  <a href="{{ url_for('projects.project_new') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Crear proyecto
+  </a>
+</div>
+{% endif %}
+
+{% endblock %}

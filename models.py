@@ -4,17 +4,26 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
+# All available modules — order matters for display
+ALL_MODULES = [
+    {'slug': 'inventory',   'name': 'Inventory Management', 'icon': 'bi-laptop',         'color': '#089ACF', 'desc': 'Asset tracking & lifecycle management'},
+    {'slug': 'projects',    'name': 'Project Management',   'icon': 'bi-kanban',          'color': '#233C6E', 'desc': 'Projects, tasks & team collaboration'},
+    {'slug': 'evaluation',  'name': 'Evaluation',           'icon': 'bi-clipboard-check', 'color': '#28A745', 'desc': 'Performance evaluations & reviews'},
+    {'slug': 'repository',  'name': 'Repository',           'icon': 'bi-folder2-open',    'color': '#6F42C1', 'desc': 'Documents & knowledge base'},
+]
+
 
 class User(db.Model):
     __tablename__ = 'users'
-    id         = db.Column(db.Integer, primary_key=True)
-    name       = db.Column(db.String(150), nullable=False)
-    username   = db.Column(db.String(80),  nullable=False, unique=True)
-    email      = db.Column(db.String(150), unique=True)
-    pwd_hash   = db.Column(db.String(256), nullable=False)
-    role       = db.Column(db.String(20),  nullable=False, default='viewer')  # admin | viewer
-    active     = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    id             = db.Column(db.Integer, primary_key=True)
+    name           = db.Column(db.String(150), nullable=False)
+    username       = db.Column(db.String(80),  nullable=False, unique=True)
+    email          = db.Column(db.String(150), unique=True)
+    pwd_hash       = db.Column(db.String(256), nullable=False)
+    role           = db.Column(db.String(20),  nullable=False, default='viewer')  # admin | viewer
+    active         = db.Column(db.Boolean, default=True)
+    module_access  = db.Column(db.Text, default='')  # comma-separated slugs, e.g. "inventory,projects"
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
 
     def set_password(self, password):
         self.pwd_hash = generate_password_hash(password)
@@ -25,6 +34,18 @@ class User(db.Model):
     @property
     def is_admin(self):
         return self.role == 'admin'
+
+    def get_modules(self):
+        """Returns list of module slugs accessible to this user."""
+        if self.role == 'admin':
+            return [m['slug'] for m in ALL_MODULES]
+        if not self.module_access:
+            return []
+        return [s.strip() for s in self.module_access.split(',') if s.strip()]
+
+    def set_modules(self, slugs):
+        """Set module access from a list of slugs."""
+        self.module_access = ','.join(slugs)
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -181,6 +202,101 @@ class AuditLog(db.Model):
 
     def __repr__(self):
         return f'<AuditLog {self.action} {self.entity_type} by {self.user_name}>'
+
+
+# ── Project Management Models ─────────────────────────────────────────────────
+
+class Project(db.Model):
+    __tablename__ = 'projects'
+    id          = db.Column(db.Integer, primary_key=True)
+    code        = db.Column(db.String(30), unique=True, nullable=False)
+    name        = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    client_id   = db.Column(db.Integer, db.ForeignKey('clients.id'))
+    status      = db.Column(db.String(30), nullable=False, default='planning')
+    # planning | active | on_hold | completed | cancelled
+    priority    = db.Column(db.String(20), nullable=False, default='medium')
+    # low | medium | high | critical
+    start_date  = db.Column(db.Date)
+    end_date    = db.Column(db.Date)
+    budget      = db.Column(db.Float)
+    progress    = db.Column(db.Integer, default=0)   # 0-100
+    owner_id    = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tasks   = db.relationship('Task', backref='project', lazy=True,
+                              cascade='all, delete-orphan',
+                              order_by='Task.created_at.asc()')
+    members = db.relationship('ProjectMember', backref='project', lazy=True,
+                              cascade='all, delete-orphan')
+    client  = db.relationship('Client', backref='projects', lazy=True)
+    owner   = db.relationship('User', backref='owned_projects', lazy=True,
+                              foreign_keys=[owner_id])
+
+    STATUS_CHOICES   = ['planning', 'active', 'on_hold', 'completed', 'cancelled']
+    PRIORITY_CHOICES = ['low', 'medium', 'high', 'critical']
+
+    @property
+    def is_overdue(self):
+        from datetime import date
+        return (self.end_date and self.end_date < date.today()
+                and self.status not in ('completed', 'cancelled'))
+
+    @property
+    def open_tasks(self):
+        return [t for t in self.tasks if t.status not in ('done', 'cancelled')]
+
+    @property
+    def done_tasks(self):
+        return [t for t in self.tasks if t.status == 'done']
+
+    def __repr__(self):
+        return f'<Project {self.code} – {self.name}>'
+
+
+class Task(db.Model):
+    __tablename__ = 'tasks'
+    id             = db.Column(db.Integer, primary_key=True)
+    project_id     = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    title          = db.Column(db.String(200), nullable=False)
+    description    = db.Column(db.Text)
+    status         = db.Column(db.String(30), nullable=False, default='pending')
+    # pending | in_progress | review | done | cancelled
+    priority       = db.Column(db.String(20), nullable=False, default='medium')
+    assigned_to_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    due_date       = db.Column(db.Date)
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at     = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    assigned_to = db.relationship('User', backref='assigned_tasks', lazy=True,
+                                  foreign_keys=[assigned_to_id])
+
+    STATUS_CHOICES   = ['pending', 'in_progress', 'review', 'done', 'cancelled']
+    PRIORITY_CHOICES = ['low', 'medium', 'high', 'critical']
+
+    @property
+    def is_overdue(self):
+        from datetime import date
+        return (self.due_date and self.due_date < date.today()
+                and self.status not in ('done', 'cancelled'))
+
+    def __repr__(self):
+        return f'<Task {self.id} – {self.title}>'
+
+
+class ProjectMember(db.Model):
+    __tablename__ = 'project_members'
+    id         = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    user_id    = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    role       = db.Column(db.String(50), default='member')  # manager | member
+    joined_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref='project_memberships', lazy=True)
+
+    def __repr__(self):
+        return f'<ProjectMember project={self.project_id} user={self.user_id}>'
 
 
 def log_action(action, entity_type, entity_id=None, entity_name=None, details=None):

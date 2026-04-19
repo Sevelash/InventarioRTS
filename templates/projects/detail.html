@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} — RTS Projects{% endblock %}
+{% block page_title %}{{ project.name }}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('projects.project_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Proyectos
+  </a>
+  <a href="{{ url_for('projects.project_edit', id=project.id) }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-pencil me-1"></i>Editar
+  </a>
+  <button class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteModal">
+    <i class="bi bi-trash"></i>
+  </button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Header info ─────────────────────────────────────────────────────────── -->
+<div class="row g-4 mb-4">
+
+  <!-- Project metadata card -->
+  <div class="col-lg-8">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-start gap-3 mb-3">
+          <div>
+            <span style="font-family:monospace;font-size:12px;color:var(--rts-gray);">{{ project.code }}</span>
+            <div class="mt-1">
+              <span class="badge bg-{{ PROJECT_STATUS_BADGES[project.status] }} me-2">
+                {{ PROJECT_STATUS_LABELS[project.status] }}
+              </span>
+              <span class="badge bg-{{ PRIORITY_BADGES[project.priority] }}">
+                {{ PRIORITY_LABELS[project.priority] }}
+              </span>
+              {% if project.is_overdue %}
+              <span class="badge bg-danger ms-1"><i class="bi bi-exclamation-triangle me-1"></i>Vencido</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        {% if project.description %}
+        <p style="font-size:13.5px;color:var(--rts-text);line-height:1.6;">{{ project.description }}</p>
+        {% endif %}
+
+        <div class="row g-3 mt-1">
+          <div class="col-sm-6 col-md-3">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);margin-bottom:3px;">Cliente</div>
+            <div style="font-size:13.5px;font-weight:600;">{{ project.client.name if project.client else '—' }}</div>
+          </div>
+          <div class="col-sm-6 col-md-3">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);margin-bottom:3px;">Responsable</div>
+            <div style="font-size:13.5px;font-weight:600;">{{ project.owner.name if project.owner else '—' }}</div>
+          </div>
+          <div class="col-sm-6 col-md-3">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);margin-bottom:3px;">Inicio</div>
+            <div style="font-size:13.5px;">{{ project.start_date.strftime('%d/%m/%Y') if project.start_date else '—' }}</div>
+          </div>
+          <div class="col-sm-6 col-md-3">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);margin-bottom:3px;">Fin</div>
+            <div style="font-size:13.5px;{% if project.is_overdue %}color:#DC3545;font-weight:600;{% endif %}">
+              {{ project.end_date.strftime('%d/%m/%Y') if project.end_date else '—' }}
+            </div>
+          </div>
+          {% if project.budget %}
+          <div class="col-sm-6 col-md-3">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);margin-bottom:3px;">Presupuesto</div>
+            <div style="font-size:13.5px;font-weight:600;">${{ '{:,.0f}'.format(project.budget) }} MXN</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress + task stats -->
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-body d-flex flex-column justify-content-center">
+        <div class="text-center mb-3">
+          <div style="font-family:'Oswald',sans-serif;font-size:3rem;font-weight:700;color:var(--rts-navy);line-height:1;">
+            {{ project.progress }}%
+          </div>
+          <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.05em;">Progreso</div>
+        </div>
+        <div class="progress mb-4" style="height:12px;border-radius:6px;">
+          <div class="progress-bar" style="width:{{ project.progress }}%;border-radius:6px;"></div>
+        </div>
+        <div class="row g-2 text-center">
+          <div class="col-4">
+            <div style="font-family:'Oswald',sans-serif;font-size:1.6rem;font-weight:600;color:#28A745;">{{ done_tasks }}</div>
+            <div style="font-size:10px;color:var(--rts-gray);text-transform:uppercase;">Listas</div>
+          </div>
+          <div class="col-4">
+            <div style="font-family:'Oswald',sans-serif;font-size:1.6rem;font-weight:600;color:var(--rts-blue);">{{ open_tasks }}</div>
+            <div style="font-size:10px;color:var(--rts-gray);text-transform:uppercase;">Abiertas</div>
+          </div>
+          <div class="col-4">
+            <div style="font-family:'Oswald',sans-serif;font-size:1.6rem;font-weight:600;color:#DC3545;">{{ overdue_tasks }}</div>
+            <div style="font-size:10px;color:var(--rts-gray);text-transform:uppercase;">Vencidas</div>
+          </div>
+        </div>
+        {% if total_tasks > 0 %}
+        <div style="font-size:11px;color:var(--rts-gray);text-align:center;margin-top:10px;">
+          Completado automático: {{ calc_progress }}%
+          <span style="font-size:10px;">({{ done_tasks }}/{{ total_tasks }} tareas)</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Tasks ──────────────────────────────────────────────────────────────── -->
+<div class="row g-4 mb-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-task me-2"></i>Tareas ({{ project.tasks|length }})</span>
+        <button class="btn btn-rts btn-sm" data-bs-toggle="modal" data-bs-target="#newTaskModal">
+          <i class="bi bi-plus-lg me-1"></i>Nueva Tarea
+        </button>
+      </div>
+
+      {% if project.tasks %}
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th style="width:36px;"></th>
+              <th>Tarea</th>
+              <th>Estado</th>
+              <th>Prioridad</th>
+              <th>Asignado a</th>
+              <th>Vencimiento</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in project.tasks %}
+            <tr class="{% if t.status == 'done' %}text-muted{% endif %}">
+              <td>
+                <!-- Quick status toggle to done -->
+                <form method="post" action="{{ url_for('projects.task_status', id=project.id, task_id=t.id) }}">
+                  <input type="hidden" name="status" value="{{ 'pending' if t.status == 'done' else 'done' }}">
+                  <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"
+                          title="{{ 'Marcar pendiente' if t.status == 'done' else 'Marcar completada' }}"
+                          style="font-size:18px;color:{{ '#28A745' if t.status == 'done' else '#CCC' }};">
+                    <i class="bi bi-{{ 'check-circle-fill' if t.status == 'done' else 'circle' }}"></i>
+                  </button>
+                </form>
+              </td>
+              <td>
+                <div style="font-size:13px;font-weight:600;{% if t.status == 'done' %}text-decoration:line-through;color:var(--rts-gray);{% else %}color:var(--rts-navy);{% endif %}">
+                  {{ t.title }}
+                </div>
+                {% if t.description %}
+                <div style="font-size:11.5px;color:var(--rts-gray);">{{ t.description[:60] }}{% if t.description|length > 60 %}…{% endif %}</div>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge bg-{{ TASK_STATUS_BADGES[t.status] }}">{{ TASK_STATUS_LABELS[t.status] }}</span>
+              </td>
+              <td>
+                <span class="badge bg-{{ PRIORITY_BADGES[t.priority] }}">{{ PRIORITY_LABELS[t.priority] }}</span>
+              </td>
+              <td style="font-size:12.5px;">{{ t.assigned_to.name if t.assigned_to else '—' }}</td>
+              <td style="font-size:12px;{% if t.is_overdue %}color:#DC3545;font-weight:600;{% endif %}">
+                {% if t.due_date %}
+                  {% if t.is_overdue %}<i class="bi bi-exclamation-triangle me-1"></i>{% endif %}
+                  {{ t.due_date.strftime('%d/%m/%Y') }}
+                {% else %}—{% endif %}
+              </td>
+              <td class="text-end">
+                <button class="btn btn-sm btn-outline-secondary" title="Editar tarea"
+                        data-bs-toggle="modal"
+                        data-bs-target="#editTaskModal{{ t.id }}">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <form method="post"
+                      action="{{ url_for('projects.task_delete', id=project.id, task_id=t.id) }}"
+                      class="d-inline"
+                      onsubmit="return confirm('¿Eliminar esta tarea?');">
+                  <button class="btn btn-sm btn-outline-danger ms-1" title="Eliminar">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body">
+        <div class="empty-state" style="padding:30px;">
+          <i class="bi bi-list-task"></i>
+          <p>No hay tareas en este proyecto.</p>
+          <button class="btn btn-rts btn-sm" data-bs-toggle="modal" data-bs-target="#newTaskModal">
+            <i class="bi bi-plus-lg me-1"></i>Agregar primera tarea
+          </button>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- ── Team Members ───────────────────────────────────────────────────────── -->
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-people me-2"></i>Equipo ({{ project.members|length }})</span>
+        {% if available_users %}
+        <button class="btn btn-rts btn-sm" data-bs-toggle="modal" data-bs-target="#addMemberModal">
+          <i class="bi bi-person-plus me-1"></i>Agregar
+        </button>
+        {% endif %}
+      </div>
+      {% if project.members %}
+      <ul class="list-group list-group-flush">
+        {% for m in project.members %}
+        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+          <div class="d-flex align-items-center gap-2">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--rts-navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:13px;">
+              {{ m.user.name[0].upper() if m.user else '?' }}
+            </div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--rts-navy);">{{ m.user.name if m.user else '?' }}</div>
+              <div style="font-size:11px;color:var(--rts-gray);">{{ m.user.email if m.user else '' }}</div>
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-{{ 'primary' if m.role == 'manager' else 'secondary' }}">
+              {{ 'Manager' if m.role == 'manager' else 'Miembro' }}
+            </span>
+            {% if m.user_id != project.owner_id %}
+            <form method="post" action="{{ url_for('projects.member_remove', id=project.id, member_id=m.id) }}"
+                  onsubmit="return confirm('¿Remover a {{ m.user.name if m.user else '' }}?');">
+              <button class="btn btn-sm btn-outline-danger p-1" style="line-height:1;" title="Remover">
+                <i class="bi bi-x"></i>
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="card-body">
+        <div class="empty-state" style="padding:20px;"><i class="bi bi-people"></i><p>Sin miembros asignados.</p></div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════ MODALS ══════════════════════════════════════════════════════════ -->
+
+<!-- New Task Modal -->
+<div class="modal fade" id="newTaskModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Nueva Tarea</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('projects.task_new', id=project.id) }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Título <span class="text-danger">*</span></label>
+            <input type="text" name="title" class="form-control" required placeholder="Describir la tarea…">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Descripción</label>
+            <textarea name="description" class="form-control" rows="2"></textarea>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Estado</label>
+              <select name="status" class="form-select">
+                <option value="pending">Pendiente</option>
+                <option value="in_progress">En Progreso</option>
+                <option value="review">En Revisión</option>
+                <option value="done">Listo</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Prioridad</label>
+              <select name="priority" class="form-select">
+                <option value="low">🟢 Baja</option>
+                <option value="medium" selected>🔵 Media</option>
+                <option value="high">🟠 Alta</option>
+                <option value="critical">🔴 Crítica</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Asignar a</label>
+              <select name="assigned_to_id" class="form-select">
+                <option value="">— Sin asignar —</option>
+                {% for u in users %}
+                <option value="{{ u.id }}">{{ u.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="mt-3">
+            <label class="form-label">Fecha de Vencimiento</label>
+            <input type="date" name="due_date" class="form-control">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-rts"><i class="bi bi-check-lg me-1"></i>Crear Tarea</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Task Modals -->
+{% for t in project.tasks %}
+<div class="modal fade" id="editTaskModal{{ t.id }}" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar Tarea</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('projects.task_edit', id=project.id, task_id=t.id) }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Título <span class="text-danger">*</span></label>
+            <input type="text" name="title" class="form-control" required value="{{ t.title }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Descripción</label>
+            <textarea name="description" class="form-control" rows="2">{{ t.description or '' }}</textarea>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Estado</label>
+              <select name="status" class="form-select">
+                {% for s in ['pending','in_progress','review','done','cancelled'] %}
+                <option value="{{ s }}" {% if t.status == s %}selected{% endif %}>{{ TASK_STATUS_LABELS[s] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Prioridad</label>
+              <select name="priority" class="form-select">
+                {% for p in ['low','medium','high','critical'] %}
+                <option value="{{ p }}" {% if t.priority == p %}selected{% endif %}>{{ PRIORITY_LABELS[p] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Asignar a</label>
+              <select name="assigned_to_id" class="form-select">
+                <option value="">— Sin asignar —</option>
+                {% for u in users %}
+                <option value="{{ u.id }}" {% if t.assigned_to_id == u.id %}selected{% endif %}>{{ u.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="mt-3">
+            <label class="form-label">Fecha de Vencimiento</label>
+            <input type="date" name="due_date" class="form-control"
+                   value="{{ t.due_date.isoformat() if t.due_date else '' }}">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-rts"><i class="bi bi-check-lg me-1"></i>Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Add Member Modal -->
+{% if available_users %}
+<div class="modal fade" id="addMemberModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Agregar Miembro</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('projects.member_add', id=project.id) }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Usuario</label>
+            <select name="user_id" class="form-select" required>
+              <option value="">— Seleccionar —</option>
+              {% for u in available_users %}
+              <option value="{{ u.id }}">{{ u.name }} ({{ u.username }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Rol en el proyecto</label>
+            <select name="role" class="form-select">
+              <option value="member">Miembro</option>
+              <option value="manager">Manager</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-rts"><i class="bi bi-check-lg me-1"></i>Agregar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Delete Project Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Eliminar Proyecto</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>¿Estás seguro de que quieres eliminar el proyecto <strong>{{ project.name }}</strong>?</p>
+        <p class="text-danger" style="font-size:13px;">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          Esta acción eliminará también todas las tareas y miembros asociados. Es irreversible.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="post" action="{{ url_for('projects.project_delete', id=project.id) }}">
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash me-1"></i>Eliminar definitivamente
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

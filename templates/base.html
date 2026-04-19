@@ -21,7 +21,7 @@
 
 <!-- ── Sidebar ─────────────────────────────────────────────── -->
 <nav class="sidebar">
-  <a href="{{ url_for('dashboard') }}" class="sidebar-brand">
+  <a href="{{ url_for('portal') }}" class="sidebar-brand">
     {% if logo_exists %}
       <img src="{{ url_for('static', filename='images/logo.png') }}"
            alt="Remote Team Solutions" style="width:130px; filter:brightness(0) invert(1);">
@@ -33,19 +33,30 @@
       </svg>
       <div class="brand-text">
         <span style="color:#fff;font-family:'Oswald',sans-serif;font-size:13px;font-weight:600;letter-spacing:.04em;">REMOTE <span style="color:#6EC1E4;">TEAM</span></span>
-        <div class="brand-sub">SOLUTIONS · Asset Mgmt</div>
+        <div class="brand-sub">SOLUTIONS · Intranet</div>
       </div>
     </div>
     {% endif %}
   </a>
 
-  <div class="nav-section">Principal</div>
-  <a href="{{ url_for('dashboard') }}"
-     class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
-    <i class="bi bi-speedometer2"></i> Dashboard
+  <!-- Portal -->
+  <div class="nav-section">Portal</div>
+  <a href="{{ url_for('portal') }}"
+     class="nav-link {% if request.endpoint == 'portal' %}active{% endif %}">
+    <i class="bi bi-grid-1x2"></i> Inicio
   </a>
 
+  {# ── Module-based sections ── shown if user has access #}
+  {% set user_modules = current_user.get('modules', []) if current_user else [] %}
+  {% set is_admin = current_user and current_user.role == 'admin' %}
+
+  {# ── INVENTORY ── #}
+  {% if is_admin or 'inventory' in user_modules %}
   <div class="nav-section">Inventario</div>
+  <a href="{{ url_for('inventory_dashboard') }}"
+     class="nav-link {% if request.endpoint == 'inventory_dashboard' %}active{% endif %}">
+    <i class="bi bi-speedometer2"></i> Dashboard
+  </a>
   <a href="{{ url_for('assets_list') }}"
      class="nav-link {% if 'asset' in (request.endpoint or '') %}active{% endif %}">
     <i class="bi bi-laptop"></i> Activos
@@ -54,8 +65,6 @@
      class="nav-link {% if 'categor' in (request.endpoint or '') %}active{% endif %}">
     <i class="bi bi-tag"></i> Categorías
   </a>
-
-  <div class="nav-section">Gestión</div>
   <a href="{{ url_for('clients_list') }}"
      class="nav-link {% if 'client' in (request.endpoint or '') %}active{% endif %}">
     <i class="bi bi-building"></i> Clientes
@@ -68,13 +77,44 @@
      class="nav-link {% if 'assignment' in (request.endpoint or '') %}active{% endif %}">
     <i class="bi bi-arrow-left-right"></i> Asignaciones
   </a>
-
-  <div class="nav-section">Logística</div>
   <a href="{{ url_for('shipments_list') }}"
      class="nav-link {% if 'shipment' in (request.endpoint or '') %}active{% endif %}">
     <i class="bi bi-truck"></i> Envíos DHL
   </a>
+  {% endif %}
 
+  {# ── PROJECTS ── #}
+  {% if is_admin or 'projects' in user_modules %}
+  <div class="nav-section">Proyectos</div>
+  <a href="{{ url_for('projects.dashboard') }}"
+     class="nav-link {% if request.endpoint == 'projects.dashboard' %}active{% endif %}">
+    <i class="bi bi-speedometer2"></i> Dashboard
+  </a>
+  <a href="{{ url_for('projects.project_list') }}"
+     class="nav-link {% if request.endpoint in ('projects.project_list','projects.project_detail','projects.project_new','projects.project_edit') %}active{% endif %}">
+    <i class="bi bi-kanban"></i> Proyectos
+  </a>
+  {% endif %}
+
+  {# ── EVALUATION ── #}
+  {% if is_admin or 'evaluation' in user_modules %}
+  <div class="nav-section">Evaluación</div>
+  <a href="{{ url_for('eval.index') }}"
+     class="nav-link {% if request.blueprint == 'eval' %}active{% endif %}">
+    <i class="bi bi-clipboard-check"></i> Evaluaciones
+  </a>
+  {% endif %}
+
+  {# ── REPOSITORY ── #}
+  {% if is_admin or 'repository' in user_modules %}
+  <div class="nav-section">Repositorio</div>
+  <a href="{{ url_for('repo.index') }}"
+     class="nav-link {% if request.blueprint == 'repo' %}active{% endif %}">
+    <i class="bi bi-folder2-open"></i> Repositorio
+  </a>
+  {% endif %}
+
+  {# ── ADMIN ── #}
   {% if current_user and current_user.role == 'admin' %}
   <div class="nav-section">Administración</div>
   <a href="{{ url_for('admin.index') }}"

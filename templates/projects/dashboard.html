@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+
+{% block title %}Project Management — RTS{% endblock %}
+{% block page_title %}Project Management{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('projects.project_new') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nuevo Proyecto
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── KPI Cards ─────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#EBF4FF;">
+        <i class="bi bi-kanban" style="color:var(--rts-navy);"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ total }}</div>
+        <div class="stat-label">Total Proyectos</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#E0F2FF;">
+        <i class="bi bi-play-circle" style="color:var(--rts-blue);"></i>
+      </div>
+      <div>
+        <div class="stat-value" style="color:var(--rts-blue);">{{ active }}</div>
+        <div class="stat-label">Activos</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#E6F5EC;">
+        <i class="bi bi-check-circle" style="color:#1B5E20;"></i>
+      </div>
+      <div>
+        <div class="stat-value" style="color:#28A745;">{{ completed }}</div>
+        <div class="stat-label">Completados</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#FFF8E1;">
+        <i class="bi bi-pause-circle" style="color:#E65100;"></i>
+      </div>
+      <div>
+        <div class="stat-value" style="color:#FFA000;">{{ on_hold }}</div>
+        <div class="stat-label">En Pausa</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#FEECEC;">
+        <i class="bi bi-exclamation-triangle" style="color:#DC3545;"></i>
+      </div>
+      <div>
+        <div class="stat-value" style="color:#DC3545;">{{ overdue }}</div>
+        <div class="stat-label">Vencidos</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3 col-xl-2">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#F3EEFF;">
+        <i class="bi bi-list-task" style="color:#6F42C1;"></i>
+      </div>
+      <div>
+        <div class="stat-value" style="color:#6F42C1;">{{ total_tasks }}</div>
+        <div class="stat-label">Total Tareas</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Main Row ──────────────────────────────────────────────────────────── -->
+<div class="row g-4">
+
+  <!-- Recent Projects -->
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history me-2"></i>Proyectos Recientes</span>
+        <a href="{{ url_for('projects.project_list') }}" class="btn btn-outline-secondary btn-sm">
+          Ver todos <i class="bi bi-arrow-right ms-1"></i>
+        </a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_projects %}
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Proyecto</th>
+              <th>Estado</th>
+              <th>Prioridad</th>
+              <th>Progreso</th>
+              <th>Fecha Fin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in recent_projects %}
+            <tr style="cursor:pointer;" onclick="location.href='{{ url_for('projects.project_detail', id=p.id) }}'">
+              <td>
+                <div style="font-weight:600;font-size:13px;color:var(--rts-navy);">{{ p.name }}</div>
+                <div style="font-size:11px;color:var(--rts-gray);font-family:monospace;">{{ p.code }}</div>
+              </td>
+              <td>
+                <span class="badge bg-{{ PROJECT_STATUS_BADGES[p.status] }}">
+                  {{ PROJECT_STATUS_LABELS[p.status] }}
+                </span>
+              </td>
+              <td>
+                <span class="badge bg-{{ PRIORITY_BADGES[p.priority] }}">
+                  {{ PRIORITY_LABELS[p.priority] }}
+                </span>
+              </td>
+              <td style="min-width:90px;">
+                <div class="progress" style="height:6px;">
+                  <div class="progress-bar" style="width:{{ p.progress }}%;"></div>
+                </div>
+                <div style="font-size:10px;color:var(--rts-gray);margin-top:2px;">{{ p.progress }}%</div>
+              </td>
+              <td style="font-size:12.5px;{% if p.is_overdue %}color:#DC3545;font-weight:600;{% endif %}">
+                {% if p.end_date %}
+                  {% if p.is_overdue %}<i class="bi bi-exclamation-triangle me-1"></i>{% endif %}
+                  {{ p.end_date.strftime('%d/%m/%Y') }}
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+          <i class="bi bi-kanban"></i>
+          <p>No hay proyectos registrados aún.</p>
+          <a href="{{ url_for('projects.project_new') }}" class="btn btn-rts btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>Crear primer proyecto
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right column -->
+  <div class="col-lg-5">
+
+    <!-- Status donut summary -->
+    <div class="card mb-4">
+      <div class="card-header"><i class="bi bi-pie-chart me-2"></i>Proyectos por Estado</div>
+      <div class="card-body">
+        <canvas id="statusChart" height="180"></canvas>
+      </div>
+    </div>
+
+    <!-- My pending tasks -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-person-check me-2"></i>Mis Tareas Pendientes</div>
+      {% if my_tasks %}
+      <ul class="list-group list-group-flush">
+        {% for t in my_tasks %}
+        <li class="list-group-item py-2 px-3">
+          <div class="d-flex align-items-start justify-content-between gap-2">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--rts-navy);">{{ t.title }}</div>
+              <div style="font-size:11px;color:var(--rts-gray);">
+                {{ t.project.name }} ·
+                <span class="badge bg-{{ TASK_STATUS_BADGES[t.status] }} ms-1">{{ TASK_STATUS_LABELS[t.status] }}</span>
+              </div>
+            </div>
+            {% if t.due_date %}
+            <span style="font-size:11px;white-space:nowrap;{% if t.is_overdue %}color:#DC3545;font-weight:600;{% else %}color:var(--rts-gray);{% endif %}">
+              {% if t.is_overdue %}<i class="bi bi-exclamation-triangle"></i> {% endif %}
+              {{ t.due_date.strftime('%d/%m/%Y') }}
+            </span>
+            {% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="card-body">
+        <div class="empty-state" style="padding:20px;">
+          <i class="bi bi-check-all"></i>
+          <p>No tienes tareas pendientes asignadas.</p>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<!-- Task stats row -->
+<div class="row g-3 mt-2">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-bar-chart me-2"></i>Resumen de Tareas</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-6 col-md-3">
+            <div class="text-center">
+              <div style="font-family:'Oswald',sans-serif;font-size:2rem;font-weight:600;color:var(--rts-navy);">{{ total_tasks }}</div>
+              <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.04em;">Total Tareas</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="text-center">
+              <div style="font-family:'Oswald',sans-serif;font-size:2rem;font-weight:600;color:#28A745;">{{ done_tasks }}</div>
+              <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.04em;">Completadas</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="text-center">
+              <div style="font-family:'Oswald',sans-serif;font-size:2rem;font-weight:600;color:var(--rts-blue);">{{ pending_tasks }}</div>
+              <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.04em;">En Progreso / Pendientes</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="text-center">
+              <div style="font-family:'Oswald',sans-serif;font-size:2rem;font-weight:600;color:#DC3545;">{{ overdue_tasks }}</div>
+              <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.04em;">Tareas Vencidas</div>
+            </div>
+          </div>
+        </div>
+        {% if total_tasks > 0 %}
+        <div class="progress mt-3" style="height:10px;">
+          <div class="progress-bar bg-success" style="width:{{ (done_tasks/total_tasks*100)|int }}%;"
+               title="Completadas"></div>
+          <div class="progress-bar bg-primary" style="width:{{ (pending_tasks/total_tasks*100)|int }}%;"
+               title="Pendientes"></div>
+          <div class="progress-bar bg-danger" style="width:{{ (overdue_tasks/total_tasks*100)|int }}%;"
+               title="Vencidas"></div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+  const ctx = document.getElementById('statusChart');
+  if (!ctx) return;
+  const labels = {{ status_chart.labels | tojson }};
+  const data   = {{ status_chart.data | tojson }};
+  const colors = ['#ADB5BD','#089ACF','#FFA000','#28A745','#DC3545'];
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        backgroundColor: colors,
+        borderWidth: 2,
+        borderColor: '#fff',
+        hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { size: 11, family: "'Aptos','Calibri',sans-serif" }, padding: 10 }
+        },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed}` } }
+      },
+      cutout: '60%',
+    }
+  });
+})();
+</script>
+{% endblock %}

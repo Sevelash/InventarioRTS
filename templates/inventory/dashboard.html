@@ -1,0 +1,539 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - RTS Asset Management{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('asset_new') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nuevo Activo
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<!-- ══════════════════════════════════════════════════════════
+     1. GRÁFICA — arriba del todo
+     ══════════════════════════════════════════════════════════ -->
+<div class="card mb-4">
+
+  <!-- Header: título + selectores período & categoría -->
+  <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <span style="font-size:14px;"><i class="bi bi-graph-up me-2"></i>Tendencia de Equipos</span>
+    <div class="d-flex align-items-center flex-wrap gap-2">
+
+      <!-- Período -->
+      <div class="d-flex align-items-center gap-1">
+        <label for="rangeSelector" style="font-size:11.5px;color:var(--rts-gray);white-space:nowrap;margin:0;font-family:'Aptos','Calibri',sans-serif;">
+          <i class="bi bi-calendar3 me-1"></i>Período:
+        </label>
+        <select id="rangeSelector" class="form-select form-select-sm" style="max-width:185px;font-size:12.5px;">
+          <option value="last12" selected>Últimos 12 meses</option>
+          <option value="last24">Últimos 24 meses</option>
+          <optgroup label="Año completo">
+            {% for y in range(chart_current_year, chart_start_year - 1, -1) %}
+            <option value="{{ y }}">{{ y }}</option>
+            {% endfor %}
+          </optgroup>
+        </select>
+      </div>
+
+      <!-- Categoría -->
+      <div class="d-flex align-items-center gap-1">
+        <label for="catSelector" style="font-size:11.5px;color:var(--rts-gray);white-space:nowrap;margin:0;font-family:'Aptos','Calibri',sans-serif;">
+          <i class="bi bi-tag me-1"></i>Categoría:
+        </label>
+        <select id="catSelector" class="form-select form-select-sm" style="max-width:200px;font-size:12.5px;">
+          <option value="all">Todas</option>
+          {% for cat in cats_for_chart %}
+          <option value="{{ cat.id }}">{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Cuerpo: canvas + panel de series -->
+  <div class="card-body d-flex gap-0" style="padding:16px 0 8px;">
+
+    <!-- Canvas -->
+    <div style="flex:1;min-width:0;padding:0 20px 0 24px;">
+      <canvas id="trendChart" style="width:100%;height:230px;max-height:230px;"></canvas>
+    </div>
+
+    <!-- Checkboxes de series -->
+    <div style="width:150px;flex-shrink:0;border-left:1px solid var(--rts-border);
+                padding:12px 16px;display:flex;flex-direction:column;
+                justify-content:center;gap:14px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;
+                  color:var(--rts-gray);font-weight:700;margin-bottom:2px;">Series</div>
+
+      <label class="series-toggle" style="--c:#089ACF;">
+        <input type="checkbox" id="chk0" checked>
+        <span class="series-box"></span>
+        <span class="series-label">Adquisiciones</span>
+      </label>
+      <label class="series-toggle" style="--c:#dc3545;">
+        <input type="checkbox" id="chk1" checked>
+        <span class="series-box"></span>
+        <span class="series-label">Bajas</span>
+      </label>
+      <label class="series-toggle" style="--c:#7C3AED;">
+        <input type="checkbox" id="chk2" checked>
+        <span class="series-box"></span>
+        <span class="series-label">Reasignaciones</span>
+      </label>
+    </div>
+
+  </div>
+
+  <!-- Footer: totales del período seleccionado -->
+  <div class="card-footer" style="background:var(--rts-bg-white);
+       border-top:1px solid var(--rts-border);padding:10px 24px;">
+    <div class="row g-0 text-center">
+      <div class="col-4" style="border-right:1px solid var(--rts-border);">
+        <div id="totalAdq" style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:600;color:#089ACF;">0</div>
+        <div style="font-size:11px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.06em;">Adquisiciones</div>
+      </div>
+      <div class="col-4" style="border-right:1px solid var(--rts-border);">
+        <div id="totalBaj" style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:600;color:#dc3545;">0</div>
+        <div style="font-size:11px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.06em;">Bajas</div>
+      </div>
+      <div class="col-4">
+        <div id="totalReas" style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:600;color:#7C3AED;">0</div>
+        <div style="font-size:11px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.06em;">Reasignaciones</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /card gráfica -->
+
+
+<!-- ══════════════════════════════════════════════════════════
+     2. TABLAS — asignaciones, envíos, categorías
+     ══════════════════════════════════════════════════════════ -->
+<div class="row g-3 mb-4">
+
+  <!-- Asignaciones recientes -->
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-arrow-left-right me-2"></i>Asignaciones Recientes</span>
+        <a href="{{ url_for('assignments_list') }}" class="btn btn-sm btn-outline-secondary" style="font-size:11px;">Ver todas</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_assignments %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th class="ps-3">Activo</th>
+                <th>Empleado</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in recent_assignments %}
+              <tr>
+                <td class="ps-3">
+                  <a href="{{ url_for('asset_detail', id=a.asset.id) }}" class="text-decoration-none fw-semibold text-navy" style="font-size:13px;">
+                    {{ a.asset.name }}
+                  </a>
+                  <div class="asset-tag-badge">{{ a.asset.asset_tag }}</div>
+                </td>
+                <td style="font-size:13px;">{{ a.employee.name }}</td>
+                <td>
+                  {% if not a.returned_date %}
+                    <span class="badge bg-primary">Activa</span>
+                  {% else %}
+                    <span class="badge bg-secondary">Devuelta</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <i class="bi bi-inbox"></i>
+          <p>No hay asignaciones aún.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Envíos activos -->
+  <div class="col-lg-4">
+    <div class="card h-100 dhl-card">
+      <div class="card-header d-flex align-items-center justify-content-between"
+           style="background:#FFFEF5;border-bottom:1px solid #F0E8B0;">
+        <span><span class="dhl-logo me-2">DHL</span>Envíos Activos</span>
+        <a href="{{ url_for('shipments_list') }}" class="btn btn-sm btn-outline-secondary" style="font-size:11px;">Ver todos</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_shipments %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th class="ps-3">Tracking</th>
+                <th>Activo</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in recent_shipments %}
+              <tr>
+                <td class="ps-3">
+                  <a href="{{ url_for('shipment_detail', id=s.id) }}" class="text-decoration-none">
+                    <code style="font-size:11.5px;color:var(--rts-navy);font-weight:700;">{{ s.tracking_number }}</code>
+                  </a>
+                  <div style="font-size:10.5px;color:var(--rts-gray);">{{ s.carrier }}</div>
+                </td>
+                <td style="font-size:12.5px;">{{ s.asset.name }}</td>
+                <td>
+                  <span class="badge bg-{{ SHIPMENT_STATUS_BADGES[s.status] }}" style="font-size:10px;">
+                    {{ SHIPMENT_STATUS_LABELS[s.status] }}
+                  </span>
+                  {% if s.estimated_delivery and s.estimated_delivery < today %}
+                    <div style="font-size:10px;color:#dc3545;font-weight:700;">Atrasado</div>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <i class="bi bi-truck"></i>
+          <p>Sin envíos activos.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Activos por categoría -->
+  <div class="col-lg-3">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-bar-chart me-2"></i>Por Categoría</div>
+      <div class="card-body">
+        {% if cat_stats and total_assets %}
+          {% for cat in cat_stats %}
+          <div class="mb-3">
+            <div class="d-flex justify-content-between mb-1">
+              <span style="font-size:12.5px;font-weight:600;color:var(--rts-text);">{{ cat.name }}</span>
+              <span style="font-size:12px;color:var(--rts-gray);">{{ cat.count }}</span>
+            </div>
+            <div class="progress" style="height:5px;">
+              <div class="progress-bar" style="width:{{ (cat.count / total_assets * 100)|round|int }}%;"></div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="empty-state"><i class="bi bi-tag"></i><p>Sin categorías.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div><!-- /tablas -->
+
+
+<!-- ══════════════════════════════════════════════════════════
+     3. KPI CARDS — al fondo
+     ══════════════════════════════════════════════════════════ -->
+<div style="border-top:1px solid var(--rts-border);margin-bottom:16px;padding-top:16px;">
+  <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--rts-gray);
+              font-weight:700;margin-bottom:12px;font-family:'Aptos','Calibri',sans-serif;">
+    Resumen General
+  </div>
+  <div class="row g-3">
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('assets_list') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#E8F0FA;">
+            <i class="bi bi-laptop" style="color:var(--rts-navy);"></i>
+          </div>
+          <div>
+            <div class="stat-value">{{ total_assets }}</div>
+            <div class="stat-label">Total Activos</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('assets_list', status='available') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#E6F9F0;">
+            <i class="bi bi-check-circle" style="color:#28a745;"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:#28a745;">{{ available }}</div>
+            <div class="stat-label">Disponibles</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('assets_list', status='in_use') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#E8F3FA;">
+            <i class="bi bi-person-check" style="color:var(--rts-blue);"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:var(--rts-blue);">{{ in_use }}</div>
+            <div class="stat-label">En Uso</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('assets_list', status='maintenance') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#FFF3E0;">
+            <i class="bi bi-tools" style="color:#E65100;"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:#E65100;">{{ maintenance }}</div>
+            <div class="stat-label">Mantenimiento</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('employees_list') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#F3E5F5;">
+            <i class="bi bi-people" style="color:#7C3AED;"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:#7C3AED;">{{ total_employees }}</div>
+            <div class="stat-label">Empleados Activos</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('assets_list', location_type='foraneo') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#FFF3E0;">
+            <i class="bi bi-truck" style="color:#E65100;"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:#E65100;">{{ foraneo_count }}</div>
+            <div class="stat-label">Activos Foráneos</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('shipments_list', status='en_transito') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#FFF8DC;">
+            <i class="bi bi-send" style="color:#B8860B;"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:#B8860B;">{{ in_transit_count }}</div>
+            <div class="stat-label">En Tránsito</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('assets_list', status='retired') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#F2F2F2;">
+            <i class="bi bi-archive" style="color:var(--rts-gray);"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:var(--rts-gray);">{{ retired }}</div>
+            <div class="stat-label">Retirados</div>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+</div><!-- /kpi cards -->
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script>
+(function () {
+
+  /* ── Datos raw del servidor (dicts {YYYY-MM: count}) ── */
+  const RAW = {{ cat_chart_raw | tojson }};
+
+  /* ── Meses en español ── */
+  const MES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+  /* ── Genera array de (año, mes) para el rango seleccionado ── */
+  function getMonths(rangeKey) {
+    const now  = new Date();
+    const cy   = now.getFullYear();
+    const cm   = now.getMonth(); // 0-based
+    if (rangeKey === 'last12' || rangeKey === 'last24') {
+      const n = rangeKey === 'last12' ? 12 : 24;
+      const months = [];
+      for (let i = n - 1; i >= 0; i--) {
+        let m = cm - i;
+        let y = cy;
+        while (m < 0)  { m += 12; y--; }
+        while (m > 11) { m -= 12; y++; }
+        months.push([y, m + 1]);
+      }
+      return months;
+    }
+    // Año concreto
+    const y = parseInt(rangeKey);
+    return Array.from({ length: 12 }, (_, i) => [y, i + 1]);
+  }
+
+  /* ── Etiquetas legibles ── */
+  function makeLabels(months) {
+    return months.map(([y, m]) => `${MES[m-1]} ${y}`);
+  }
+
+  /* ── Extrae array de valores del dict raw ── */
+  function fillArray(dict, months) {
+    return months.map(([y, m]) => dict[`${y}-${String(m).padStart(2,'0')}`] || 0);
+  }
+
+  /* ── Suma total (solo meses visibles) ── */
+  const sum = arr => arr.reduce((a, b) => a + b, 0);
+
+  /* ── Paleta ── */
+  const SERIES = [
+    { key: 'adquisiciones',  label: 'Adquisiciones',  color: '#089ACF', bg: 'rgba(8,154,207,.08)'  },
+    { key: 'bajas',          label: 'Bajas',           color: '#dc3545', bg: 'rgba(220,53,69,.06)'  },
+    { key: 'reasignaciones', label: 'Reasignaciones',  color: '#7C3AED', bg: 'rgba(124,58,237,.06)' },
+  ];
+
+  function buildDatasets(catKey, months) {
+    const d = RAW[catKey] || RAW['all'];
+    return SERIES.map((s, i) => ({
+      label:               s.label,
+      data:                fillArray(d[s.key], months),
+      borderColor:         s.color,
+      backgroundColor:     s.bg,
+      pointBackgroundColor: s.color,
+      pointBorderColor:    '#fff',
+      pointBorderWidth:    1.5,
+      tension:             0.35,
+      fill:                true,
+      borderWidth:         2.5,
+      pointRadius:         5,
+      pointHoverRadius:    8,
+      hidden:              !document.getElementById('chk'+i).checked,
+      datalabels: {
+        display:   ctx => ctx.dataset.data[ctx.dataIndex] > 0,
+        align: 'top', anchor: 'end', offset: 4,
+        formatter: v => v,
+        font: { size: 10, weight: '700', family: "'Aptos','Calibri',sans-serif" },
+        color: s.color,
+        backgroundColor: '#fff',
+        borderColor: s.color, borderWidth: 1, borderRadius: 3,
+        padding: { top:1, bottom:1, left:4, right:4 },
+      },
+    }));
+  }
+
+  function updateTotals(catKey, months) {
+    const d = RAW[catKey] || RAW['all'];
+    document.getElementById('totalAdq').textContent  = sum(fillArray(d.adquisiciones,  months)).toLocaleString();
+    document.getElementById('totalBaj').textContent  = sum(fillArray(d.bajas,          months)).toLocaleString();
+    document.getElementById('totalReas').textContent = sum(fillArray(d.reasignaciones, months)).toLocaleString();
+  }
+
+  /* ── Estado inicial ── */
+  let currentRange = 'last12';
+  let currentCat   = 'all';
+  let currentMonths = getMonths(currentRange);
+
+  /* ── Crear chart ── */
+  Chart.register(ChartDataLabels);
+
+  const chart = new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+      labels:   makeLabels(currentMonths),
+      datasets: buildDatasets(currentCat, currentMonths),
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      layout: { padding: { top: 22 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#fff', borderColor: '#DDE3ED', borderWidth: 1,
+          titleColor: '#233C6E',
+          titleFont:  { family: "'Oswald',sans-serif", size: 13, weight: '500' },
+          bodyColor:  '#54595F',
+          bodyFont:   { family: "'Aptos','Calibri',sans-serif", size: 12 },
+          padding: 12,
+          callbacks: {
+            title: ctx => ctx[0].label,
+            label: ctx => `   ${ctx.dataset.label}:  ${ctx.parsed.y.toLocaleString()}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid:  { display: false },
+          ticks: { font: { family: "'Aptos','Calibri',sans-serif", size: 11 },
+                   color: '#7A7A7A', maxRotation: 0, autoSkip: true, maxTicksLimit: 14 },
+          border: { color: '#DDE3ED' },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { precision: 0,
+                   font: { family: "'Aptos','Calibri',sans-serif", size: 11 },
+                   color: '#7A7A7A' },
+          grid:  { color: '#EEF1F6' },
+          border: { dash: [4,4], color: 'transparent' },
+        },
+      },
+    },
+  });
+
+  updateTotals(currentCat, currentMonths);
+
+  /* ── Función central de refresco ── */
+  function refresh() {
+    currentMonths = getMonths(currentRange);
+    const datasets = buildDatasets(currentCat, currentMonths);
+    chart.data.labels   = makeLabels(currentMonths);
+    chart.data.datasets = datasets;
+    chart.update('active');
+    updateTotals(currentCat, currentMonths);
+  }
+
+  /* ── Selectores ── */
+  document.getElementById('rangeSelector').addEventListener('change', function () {
+    currentRange = this.value;
+    refresh();
+  });
+
+  document.getElementById('catSelector').addEventListener('change', function () {
+    currentCat = this.value;
+    refresh();
+  });
+
+  /* ── Checkboxes ── */
+  [0,1,2].forEach(i => {
+    document.getElementById('chk'+i).addEventListener('change', function () {
+      chart.data.datasets[i].hidden = !this.checked;
+      chart.update('active');
+    });
+  });
+
+})();
+</script>
+{% endblock %}

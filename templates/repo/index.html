@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Repository — RTS{% endblock %}
+{% block page_title %}Repository{% endblock %}
+
+{% block content %}
+<div class="module-coming-soon">
+  <div class="module-coming-soon-icon" style="background:rgba(111,66,193,.1);color:#6F42C1;">
+    <i class="bi bi-folder2-open"></i>
+  </div>
+  <h2>Repositorio RTS</h2>
+  <p>El repositorio centralizado de documentos, procesos y conocimiento de Remote Team Solutions. En construcción.</p>
+  <div class="module-coming-soon-features">
+    <div class="feature-item"><i class="bi bi-check-circle text-success me-2"></i>Documentos y manuales</div>
+    <div class="feature-item"><i class="bi bi-check-circle text-success me-2"></i>Procesos y procedimientos</div>
+    <div class="feature-item"><i class="bi bi-check-circle text-success me-2"></i>Base de conocimiento</div>
+    <div class="feature-item"><i class="bi bi-check-circle text-success me-2"></i>Búsqueda avanzada</div>
+  </div>
+  <a href="{{ url_for('portal') }}" class="btn btn-outline-secondary mt-3">
+    <i class="bi bi-arrow-left me-1"></i>Volver al Portal
+  </a>
+</div>
+{% endblock %}

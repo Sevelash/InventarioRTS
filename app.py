@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
-from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action
+from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action, ALL_MODULES
 from datetime import datetime, date
 import os
 
@@ -11,12 +11,24 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
 # ── Auth blueprint ────────────────────────────────────────────────────────────
-from auth import auth_bp, login_required
+from auth import auth_bp, login_required, module_required
 app.register_blueprint(auth_bp)
 
 # ── Admin blueprint ───────────────────────────────────────────────────────────
 from admin import admin_bp
 app.register_blueprint(admin_bp)
+
+# ── Projects blueprint ────────────────────────────────────────────────────────
+from projects import projects_bp
+app.register_blueprint(projects_bp)
+
+# ── Evaluation blueprint ──────────────────────────────────────────────────────
+from eval import eval_bp
+app.register_blueprint(eval_bp)
+
+# ── Repository blueprint ──────────────────────────────────────────────────────
+from repo import repo_bp
+app.register_blueprint(repo_bp)
 
 with app.app_context():
     db.create_all()
@@ -35,6 +47,9 @@ with app.app_context():
                      ('cpu','VARCHAR(150)'), ('supplier','VARCHAR(150)'),
                      ('last_maintenance','DATE'), ('client_id','INTEGER')]:
         _add_col_if_missing('assets', col, typ)
+
+    # module_access field on users
+    _add_col_if_missing('users', 'module_access', 'TEXT')
 
     # audit_logs table is created by db.create_all() above
 
@@ -65,11 +80,40 @@ def parse_date(value):
         return None
 
 
-# ── Dashboard ─────────────────────────────────────────────────────────────────
+# ── Portal ────────────────────────────────────────────────────────────────────
 
 @app.route('/')
 @login_required
-def dashboard():
+def portal():
+    user     = session.get('user', {})
+    modules  = user.get('modules', [])
+    is_admin = user.get('role') == 'admin'
+
+    # Build list of accessible module cards
+    accessible = []
+    for m in ALL_MODULES:
+        if is_admin or m['slug'] in modules:
+            card = dict(m)
+            # Map slug → URL
+            slug = m['slug']
+            if slug == 'inventory':
+                card['url'] = url_for('inventory_dashboard')
+            elif slug == 'projects':
+                card['url'] = url_for('projects.dashboard')
+            elif slug == 'evaluation':
+                card['url'] = url_for('eval.index')
+            elif slug == 'repository':
+                card['url'] = url_for('repo.index')
+            accessible.append(card)
+
+    return render_template('portal.html', accessible_modules=accessible)
+
+
+# ── Inventory Dashboard ───────────────────────────────────────────────────────
+
+@app.route('/inventory')
+@module_required('inventory')
+def inventory_dashboard():
     total_assets      = Asset.query.count()
     available         = Asset.query.filter_by(status='available').count()
     in_use            = Asset.query.filter_by(status='in_use').count()
@@ -164,7 +208,7 @@ def dashboard():
 
     chart_start_year = 2020
 
-    return render_template('dashboard.html',
+    return render_template('inventory/dashboard.html',
                            total_assets=total_assets, available=available,
                            in_use=in_use, maintenance=maintenance, retired=retired,
                            total_employees=total_employees, total_categories=total_categories,
@@ -744,6 +788,7 @@ def inject_globals():
         'current_user': session.get('user'),
         'logo_exists': _img_exists('logo.png'),
         'remoties_exists': _img_exists('remoties.png'),
+        'ALL_MODULES': ALL_MODULES,
         'STATUS_BADGES': {
             'available':   'success',
             'in_use':      'primary',

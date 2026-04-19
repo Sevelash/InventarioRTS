@@ -10,7 +10,7 @@
 
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-lg-6">
+  <div class="col-lg-7">
     <form method="post">
       <div class="card mb-4">
         <div class="card-header"><i class="bi bi-person me-2"></i>Datos del Usuario</div>
@@ -42,8 +42,7 @@
 
             <div class="col-sm-6">
               <label class="form-label">
-                Contraseña
-                {% if not user %}<span class="text-danger">*</span>{% endif %}
+                Contraseña {% if not user %}<span class="text-danger">*</span>{% endif %}
               </label>
               <input type="password" name="password" class="form-control"
                      {% if not user %}required{% endif %}
@@ -56,7 +55,7 @@
 
             <div class="col-sm-6">
               <label class="form-label">Rol <span class="text-danger">*</span></label>
-              <select name="role" class="form-select" required>
+              <select name="role" class="form-select" required id="roleSelect">
                 <option value="viewer" {% if form.get('role', user.role if user else 'viewer') == 'viewer' %}selected{% endif %}>
                   Viewer — Solo lectura
                 </option>
@@ -80,6 +79,33 @@
         </div>
       </div>
 
+      <!-- Module Access -->
+      <div class="card mb-4" id="moduleAccessCard">
+        <div class="card-header"><i class="bi bi-grid-1x2 me-2"></i>Acceso a Módulos</div>
+        <div class="card-body">
+          <div class="row g-2">
+            {% set current_mods = form.getlist('modules') if form.getlist('modules') else (user.get_modules() if user else []) %}
+            {% for m in all_modules %}
+            <div class="col-12 col-sm-6">
+              <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid var(--rts-border);background:#fff;cursor:pointer;transition:border-color .15s;">
+                <input type="checkbox" name="modules" value="{{ m.slug }}"
+                       {% if m.slug in current_mods %}checked{% endif %}
+                       style="width:16px;height:16px;accent-color:{{ m.color }};flex-shrink:0;">
+                <i class="bi {{ m.icon }}" style="color:{{ m.color }};font-size:1.1rem;"></i>
+                <div>
+                  <div style="font-size:13px;font-weight:600;color:var(--rts-navy);">{{ m.name }}</div>
+                  <div style="font-size:11px;color:var(--rts-gray);">{{ m.desc }}</div>
+                </div>
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="mt-2" style="font-size:11.5px;color:var(--rts-gray);">
+            <i class="bi bi-info-circle me-1"></i>Los administradores tienen acceso a todos los módulos automáticamente.
+          </div>
+        </div>
+      </div>
+
       <div class="d-flex gap-2">
         <button type="submit" class="btn btn-rts">
           <i class="bi bi-check-lg me-1"></i>{{ 'Guardar Cambios' if user else 'Crear Usuario' }}
@@ -89,4 +115,18 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const roleSelect = document.getElementById('roleSelect');
+const moduleCard = document.getElementById('moduleAccessCard');
+function updateModules() {
+  const isAdmin = roleSelect.value === 'admin';
+  moduleCard.style.opacity = isAdmin ? '0.5' : '1';
+  moduleCard.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = isAdmin);
+}
+roleSelect.addEventListener('change', updateModules);
+updateModules();
+</script>
 {% endblock %}
