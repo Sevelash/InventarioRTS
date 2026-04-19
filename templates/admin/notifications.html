@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications — Admin RTS{% endblock %}
+{% block page_title %}Notification Settings{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('admin.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Admin Panel
+  </a>
+{% endblock %}
+
+{% block content %}
+<form method="post">
+<input type="hidden" name="action" value="save">
+
+<div class="row g-4">
+
+  <!-- ── Left column ─────────────────────────────────────── -->
+  <div class="col-lg-7">
+
+    <!-- Master toggle -->
+    <div class="card mb-4 border-0 shadow-sm">
+      <div class="card-header bg-white fw-bold d-flex align-items-center gap-2 py-3">
+        <i class="bi bi-bell text-primary"></i> Global Notifications
+      </div>
+      <div class="card-body">
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" role="switch"
+                 id="enabled" name="enabled" value="1"
+                 {{ 'checked' if cfg.enabled }}>
+          <label class="form-check-label fw-semibold" for="enabled">
+            Enable all notifications
+          </label>
+        </div>
+        <small class="text-muted d-block mt-1">
+          Master switch — disabling this suppresses all Teams and Email notifications regardless of individual settings below.
+        </small>
+      </div>
+    </div>
+
+    <!-- Teams -->
+    <div class="card mb-4 border-0 shadow-sm">
+      <div class="card-header bg-white fw-bold d-flex align-items-center gap-2 py-3">
+        <i class="bi bi-microsoft-teams" style="color:#6264A7;"></i>
+        Microsoft Teams
+      </div>
+      <div class="card-body">
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" role="switch"
+                 id="teams_enabled" name="teams_enabled" value="1"
+                 {{ 'checked' if cfg.teams_enabled }}>
+          <label class="form-check-label" for="teams_enabled">Enable Teams notifications</label>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label form-label-sm fw-semibold">Incoming Webhook URL</label>
+          <input type="url" name="teams_webhook_url" class="form-control form-control-sm"
+                 placeholder="https://outlook.office.com/webhook/..."
+                 value="{{ cfg.teams_webhook_url or '' }}">
+          <div class="form-text">
+            In Teams: <em>Channel → ⋯ → Connectors → Incoming Webhook → Configure</em>.
+            Copy the webhook URL here.
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label form-label-sm fw-semibold">Channel display name</label>
+          <input type="text" name="teams_channel_name" class="form-control form-control-sm"
+                 value="{{ cfg.teams_channel_name or 'RTS Projects' }}">
+          <div class="form-text">Shown as subtitle in each Teams card (cosmetic only).</div>
+        </div>
+
+        <!-- Test button -->
+        <div class="d-flex gap-2 mt-2">
+          <button type="submit" name="action" value="test_teams"
+                  class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-send me-1"></i>Send test message
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Email / SMTP -->
+    <div class="card mb-4 border-0 shadow-sm">
+      <div class="card-header bg-white fw-bold d-flex align-items-center gap-2 py-3">
+        <i class="bi bi-envelope-at text-primary"></i>
+        Email (SMTP / Office 365)
+      </div>
+      <div class="card-body">
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" role="switch"
+                 id="email_enabled" name="email_enabled" value="1"
+                 {{ 'checked' if cfg.email_enabled }}>
+          <label class="form-check-label" for="email_enabled">Enable email notifications</label>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-sm-8">
+            <label class="form-label form-label-sm fw-semibold">SMTP Host</label>
+            <input type="text" name="smtp_host" class="form-control form-control-sm"
+                   value="{{ cfg.smtp_host or 'smtp.office365.com' }}">
+          </div>
+          <div class="col-sm-4">
+            <label class="form-label form-label-sm fw-semibold">Port</label>
+            <input type="number" name="smtp_port" class="form-control form-control-sm"
+                   value="{{ cfg.smtp_port or 587 }}">
+          </div>
+
+          <div class="col-sm-6">
+            <label class="form-label form-label-sm fw-semibold">SMTP Username</label>
+            <input type="text" name="smtp_user" class="form-control form-control-sm"
+                   placeholder="notifications@yourcompany.com"
+                   value="{{ cfg.smtp_user or '' }}">
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label form-label-sm fw-semibold">SMTP Password</label>
+            <input type="password" name="smtp_password" class="form-control form-control-sm"
+                   placeholder="Leave blank to keep current password">
+            <div class="form-text">Only enter a new value to change the password.</div>
+          </div>
+
+          <div class="col-sm-6">
+            <label class="form-label form-label-sm fw-semibold">From address</label>
+            <input type="email" name="smtp_from" class="form-control form-control-sm"
+                   placeholder="notifications@yourcompany.com"
+                   value="{{ cfg.smtp_from or '' }}">
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label form-label-sm fw-semibold">From name</label>
+            <input type="text" name="smtp_from_name" class="form-control form-control-sm"
+                   value="{{ cfg.smtp_from_name or 'RTS Intranet' }}">
+          </div>
+
+          <div class="col-12">
+            <label class="form-label form-label-sm fw-semibold">App base URL</label>
+            <input type="url" name="app_base_url" class="form-control form-control-sm"
+                   placeholder="https://rts.yourcompany.com"
+                   value="{{ cfg.app_base_url or '' }}">
+            <div class="form-text">Used to build clickable links inside notification emails/cards.</div>
+          </div>
+        </div>
+
+        <!-- Test button -->
+        <div class="d-flex gap-2 mt-3">
+          <button type="submit" name="action" value="test_email"
+                  class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-envelope me-1"></i>Send test email to me
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /left column -->
+
+  <!-- ── Right column ────────────────────────────────────── -->
+  <div class="col-lg-5">
+
+    <!-- Event toggles -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white fw-bold d-flex align-items-center gap-2 py-3">
+        <i class="bi bi-toggles text-success"></i> Event Triggers
+      </div>
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
+
+          <li class="list-group-item d-flex align-items-center gap-3 py-3">
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" role="switch"
+                     id="nt_task_assigned" name="notify_task_assigned" value="1"
+                     {{ 'checked' if cfg.notify_task_assigned }}>
+              <label class="form-check-label" for="nt_task_assigned"></label>
+            </div>
+            <div>
+              <div class="fw-semibold" style="font-size:13px;">Task assigned</div>
+              <div class="text-muted" style="font-size:11.5px;">Notify assignee when a task is created or re-assigned.</div>
+            </div>
+          </li>
+
+          <li class="list-group-item d-flex align-items-center gap-3 py-3">
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" role="switch"
+                     id="nt_status" name="notify_status_change" value="1"
+                     {{ 'checked' if cfg.notify_status_change }}>
+              <label class="form-check-label" for="nt_status"></label>
+            </div>
+            <div>
+              <div class="fw-semibold" style="font-size:13px;">Task status changed</div>
+              <div class="text-muted" style="font-size:11.5px;">Notify assignee when a task moves to a different column.</div>
+            </div>
+          </li>
+
+          <li class="list-group-item d-flex align-items-center gap-3 py-3">
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" role="switch"
+                     id="nt_comment" name="notify_comment" value="1"
+                     {{ 'checked' if cfg.notify_comment }}>
+              <label class="form-check-label" for="nt_comment"></label>
+            </div>
+            <div>
+              <div class="fw-semibold" style="font-size:13px;">New comment</div>
+              <div class="text-muted" style="font-size:11.5px;">Notify assignee when someone comments on their task.</div>
+            </div>
+          </li>
+
+          <li class="list-group-item d-flex align-items-center gap-3 py-3">
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" role="switch"
+                     id="nt_proj_created" name="notify_project_created" value="1"
+                     {{ 'checked' if cfg.notify_project_created }}>
+              <label class="form-check-label" for="nt_proj_created"></label>
+            </div>
+            <div>
+              <div class="fw-semibold" style="font-size:13px;">Project created</div>
+              <div class="text-muted" style="font-size:11.5px;">Post to Teams when a new project is created.</div>
+            </div>
+          </li>
+
+          <li class="list-group-item d-flex align-items-center gap-3 py-3">
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" role="switch"
+                     id="nt_proj_updated" name="notify_project_updated" value="1"
+                     {{ 'checked' if cfg.notify_project_updated }}>
+              <label class="form-check-label" for="nt_proj_updated"></label>
+            </div>
+            <div>
+              <div class="fw-semibold" style="font-size:13px;">Project status changed</div>
+              <div class="text-muted" style="font-size:11.5px;">Post to Teams when a project's status is updated.</div>
+            </div>
+          </li>
+
+        </ul>
+      </div>
+    </div>
+
+    <!-- Info card -->
+    <div class="card border-0 bg-light">
+      <div class="card-body" style="font-size:12.5px;">
+        <div class="d-flex align-items-center gap-2 mb-2 fw-bold text-navy">
+          <i class="bi bi-info-circle"></i> How it works
+        </div>
+        <ul class="mb-0 ps-3 text-muted" style="line-height:1.8;">
+          <li>Teams messages are sent via an <strong>Incoming Webhook</strong> connector — no app registration required.</li>
+          <li>Email uses Office 365 SMTP with <strong>STARTTLS</strong> on port 587. The account must have <em>SMTP AUTH</em> enabled in Exchange Online.</li>
+          <li>All notifications fire in a <strong>background thread</strong> so they never slow down the UI.</li>
+          <li>The SMTP password is stored locally in <code>instance/notify_config.json</code> and is never committed to git.</li>
+        </ul>
+      </div>
+    </div>
+
+  </div><!-- /right column -->
+
+</div><!-- /row -->
+
+<!-- Save bar -->
+<div class="d-flex justify-content-end gap-2 mt-2 mb-4">
+  <a href="{{ url_for('admin.index') }}" class="btn btn-outline-secondary">Cancel</a>
+  <button type="submit" name="action" value="save" class="btn btn-primary px-4">
+    <i class="bi bi-floppy me-1"></i>Save settings
+  </button>
+</div>
+
+</form>
+{% endblock %}

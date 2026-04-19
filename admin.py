@@ -1,9 +1,10 @@
 """
 RTS Asset Management — Panel de Administración
-  /admin/           → resumen
-  /admin/branding   → subir logo, remoties, favicon
-  /admin/users      → gestión de usuarios + invitaciones
-  /admin/logs       → audit trail completo
+  /admin/              → resumen
+  /admin/branding      → logo / remoties / favicon
+  /admin/users         → user management
+  /admin/notifications → Teams + Email notification settings
+  /admin/logs          → audit trail
 """
 import os, json
 from flask import (Blueprint, render_template, request, redirect,
@@ -11,6 +12,7 @@ from flask import (Blueprint, render_template, request, redirect,
 from werkzeug.utils import secure_filename
 from models import db, User, AuditLog, log_action
 from auth import admin_required
+import notifications as notif
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -193,6 +195,70 @@ def user_delete(id):
     db.session.commit()
     flash(f'Usuario "{name}" eliminado.', 'warning')
     return redirect(url_for('admin.users'))
+
+
+# ── Notifications ─────────────────────────────────────────────────────────────
+
+@admin_bp.route('/notifications', methods=['GET', 'POST'])
+@admin_required
+def notifications():
+    cfg = notif.load_config()
+
+    if request.method == 'POST':
+        action = request.form.get('action', 'save')
+
+        if action == 'test_teams':
+            notif.send_teams(
+                'RTS Test Notification',
+                'Teams integration is working correctly from RTS Intranet! 🎉',
+                facts=[('Sent by', session['user']['name']), ('Source', 'Admin Panel')],
+                color='28A745'
+            )
+            flash('Test notification sent to Teams. Check your channel in a moment.', 'info')
+            return redirect(url_for('admin.notifications'))
+
+        if action == 'test_email':
+            notif.send_email(
+                session['user'].get('email', ''),
+                '[RTS] Test Email Notification',
+                'RTS Email Test',
+                'Email integration is working correctly from RTS Intranet! 🎉',
+                facts=[('Sent by', session['user']['name']), ('Source', 'Admin Panel')],
+            )
+            flash('Test email sent. Check your inbox in a moment.', 'info')
+            return redirect(url_for('admin.notifications'))
+
+        # Save config
+        new_cfg = {
+            'enabled':               'enabled' in request.form,
+            'teams_enabled':         'teams_enabled' in request.form,
+            'teams_webhook_url':     request.form.get('teams_webhook_url', '').strip(),
+            'teams_channel_name':    request.form.get('teams_channel_name', 'RTS Projects').strip(),
+            'email_enabled':         'email_enabled' in request.form,
+            'smtp_host':             request.form.get('smtp_host', 'smtp.office365.com').strip(),
+            'smtp_port':             int(request.form.get('smtp_port', 587)),
+            'smtp_user':             request.form.get('smtp_user', '').strip(),
+            'smtp_from':             request.form.get('smtp_from', '').strip(),
+            'smtp_from_name':        request.form.get('smtp_from_name', 'RTS Intranet').strip(),
+            'app_base_url':          request.form.get('app_base_url', '').strip(),
+            'notify_task_assigned':  'notify_task_assigned' in request.form,
+            'notify_status_change':  'notify_status_change' in request.form,
+            'notify_comment':        'notify_comment' in request.form,
+            'notify_project_created':'notify_project_created' in request.form,
+            'notify_project_updated':'notify_project_updated' in request.form,
+        }
+        # Only update password if provided (don't overwrite with blank)
+        new_pwd = request.form.get('smtp_password', '').strip()
+        new_cfg['smtp_password'] = new_pwd if new_pwd else cfg.get('smtp_password', '')
+
+        notif.save_config(new_cfg)
+        log_action('update', 'notifications', entity_name='Notification Config',
+                   details='Notification settings updated via admin panel')
+        db.session.commit()
+        flash('Notification settings saved.', 'success')
+        return redirect(url_for('admin.notifications'))
+
+    return render_template('admin/notifications.html', cfg=cfg)
 
 
 # ── Logs ──────────────────────────────────────────────────────────────────────

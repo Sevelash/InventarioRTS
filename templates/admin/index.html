@@ -10,6 +10,9 @@
   <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-people me-1"></i>Usuarios
   </a>
+  <a href="{{ url_for('admin.notifications') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-bell me-1"></i>Notifications
+  </a>
   <a href="{{ url_for('admin.logs') }}" class="btn btn-navy btn-sm">
     <i class="bi bi-journal-text me-1"></i>Ver Logs
   </a>
@@ -87,6 +90,9 @@
         </a>
         <a href="{{ url_for('admin.user_new') }}" class="btn btn-rts text-start">
           <i class="bi bi-plus-lg me-2"></i>Crear Nuevo Usuario
+        </a>
+        <a href="{{ url_for('admin.notifications') }}" class="btn btn-outline-secondary text-start">
+          <i class="bi bi-bell me-2"></i>Notification Settings
         </a>
         <a href="{{ url_for('admin.logs') }}" class="btn btn-outline-secondary text-start">
           <i class="bi bi-journal-text me-2"></i>Ver Audit Log Completo

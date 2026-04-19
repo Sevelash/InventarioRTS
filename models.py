@@ -206,6 +206,7 @@ class AuditLog(db.Model):
 
 # ── Project Management Models ─────────────────────────────────────────────────
 
+
 class Project(db.Model):
     __tablename__ = 'projects'
     id          = db.Column(db.Integer, primary_key=True)
@@ -297,6 +298,42 @@ class ProjectMember(db.Model):
 
     def __repr__(self):
         return f'<ProjectMember project={self.project_id} user={self.user_id}>'
+
+
+class TaskComment(db.Model):
+    __tablename__ = 'task_comments'
+    id         = db.Column(db.Integer, primary_key=True)
+    task_id    = db.Column(db.Integer, db.ForeignKey('tasks.id', ondelete='CASCADE'), nullable=False)
+    user_id    = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user_name  = db.Column(db.String(150))   # snapshot for history
+    content    = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref='task_comments', lazy=True)
+    task = db.relationship('Task', backref='comments', lazy=True,
+                           foreign_keys=[task_id])
+
+    def __repr__(self):
+        return f'<TaskComment task={self.task_id} by={self.user_name}>'
+
+
+class ProjectActivity(db.Model):
+    """Timeline of everything that happens in a project."""
+    __tablename__ = 'project_activities'
+    id          = db.Column(db.Integer, primary_key=True)
+    project_id  = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    user_id     = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user_name   = db.Column(db.String(150))
+    action      = db.Column(db.String(100))   # created_task | moved_task | commented | member_added etc.
+    entity_type = db.Column(db.String(50))    # task | project | comment | member
+    entity_name = db.Column(db.String(200))
+    details     = db.Column(db.Text)
+    icon        = db.Column(db.String(50), default='circle')  # bootstrap icon
+    color       = db.Column(db.String(20), default='secondary')
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<ProjectActivity {self.action} in project={self.project_id}>'
 
 
 def log_action(action, entity_type, entity_id=None, entity_name=None, details=None):

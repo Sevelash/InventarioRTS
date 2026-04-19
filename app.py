@@ -52,6 +52,11 @@ with app.app_context():
     # module_access field on users
     _add_col_if_missing('users', 'module_access', 'TEXT')
 
+    # task_comments and project_activities — created by db.create_all() above
+    # but add any missing columns if model evolved
+    for col, typ in [('icon', 'VARCHAR(50)'), ('color', 'VARCHAR(20)')]:
+        _add_col_if_missing('project_activities', col, typ)
+
     # audit_logs table is created by db.create_all() above
 
     # Crear admin por defecto si no existe ningún usuario

@@ -1,14 +1,13 @@
 {% extends "base.html" %}
-
 {% block title %}{{ project.name }} — RTS Projects{% endblock %}
 {% block page_title %}{{ project.name }}{% endblock %}
 
 {% block topbar_actions %}
   <a href="{{ url_for('projects.project_list') }}" class="btn btn-outline-secondary btn-sm">
-    <i class="bi bi-arrow-left me-1"></i>Proyectos
+    <i class="bi bi-arrow-left me-1"></i>Projects
   </a>
   <a href="{{ url_for('projects.project_edit', id=project.id) }}" class="btn btn-outline-secondary btn-sm">
-    <i class="bi bi-pencil me-1"></i>Editar
+    <i class="bi bi-pencil me-1"></i>Edit
   </a>
   <button class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteModal">
     <i class="bi bi-trash"></i>
@@ -17,368 +16,569 @@
 
 {% block content %}
 
-<!-- ── Header info ─────────────────────────────────────────────────────────── -->
-<div class="row g-4 mb-4">
-
-  <!-- Project metadata card -->
-  <div class="col-lg-8">
-    <div class="card h-100">
-      <div class="card-body">
-        <div class="d-flex align-items-start gap-3 mb-3">
-          <div>
-            <span style="font-family:monospace;font-size:12px;color:var(--rts-gray);">{{ project.code }}</span>
-            <div class="mt-1">
-              <span class="badge bg-{{ PROJECT_STATUS_BADGES[project.status] }} me-2">
-                {{ PROJECT_STATUS_LABELS[project.status] }}
-              </span>
-              <span class="badge bg-{{ PRIORITY_BADGES[project.priority] }}">
-                {{ PRIORITY_LABELS[project.priority] }}
-              </span>
-              {% if project.is_overdue %}
-              <span class="badge bg-danger ms-1"><i class="bi bi-exclamation-triangle me-1"></i>Vencido</span>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-
-        {% if project.description %}
-        <p style="font-size:13.5px;color:var(--rts-text);line-height:1.6;">{{ project.description }}</p>
+<!-- ── Project header ────────────────────────────────────────────────────── -->
+<div class="proj-header mb-4">
+  <div class="d-flex align-items-start gap-3 flex-wrap">
+    <div class="flex-grow-1">
+      <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+        <span style="font-family:monospace;font-size:12px;color:var(--rts-gray);background:#F0F4FA;padding:2px 8px;border-radius:4px;">
+          {{ project.code }}
+        </span>
+        <span class="badge bg-{{ PROJECT_STATUS_BADGES[project.status] }}">
+          {{ PROJECT_STATUS_LABELS[project.status] }}
+        </span>
+        <span class="badge bg-{{ PRIORITY_BADGES[project.priority] }}">
+          {{ PRIORITY_LABELS[project.priority] }}
+        </span>
+        {% if project.is_overdue %}
+        <span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Overdue</span>
         {% endif %}
-
-        <div class="row g-3 mt-1">
-          <div class="col-sm-6 col-md-3">
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);margin-bottom:3px;">Cliente</div>
-            <div style="font-size:13.5px;font-weight:600;">{{ project.client.name if project.client else '—' }}</div>
-          </div>
-          <div class="col-sm-6 col-md-3">
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);margin-bottom:3px;">Responsable</div>
-            <div style="font-size:13.5px;font-weight:600;">{{ project.owner.name if project.owner else '—' }}</div>
-          </div>
-          <div class="col-sm-6 col-md-3">
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);margin-bottom:3px;">Inicio</div>
-            <div style="font-size:13.5px;">{{ project.start_date.strftime('%d/%m/%Y') if project.start_date else '—' }}</div>
-          </div>
-          <div class="col-sm-6 col-md-3">
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);margin-bottom:3px;">Fin</div>
-            <div style="font-size:13.5px;{% if project.is_overdue %}color:#DC3545;font-weight:600;{% endif %}">
-              {{ project.end_date.strftime('%d/%m/%Y') if project.end_date else '—' }}
-            </div>
-          </div>
-          {% if project.budget %}
-          <div class="col-sm-6 col-md-3">
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);margin-bottom:3px;">Presupuesto</div>
-            <div style="font-size:13.5px;font-weight:600;">${{ '{:,.0f}'.format(project.budget) }} MXN</div>
-          </div>
-          {% endif %}
-        </div>
       </div>
+      <div class="d-flex gap-4 flex-wrap" style="font-size:12.5px;color:var(--rts-gray);">
+        {% if project.client %}<span><i class="bi bi-building me-1"></i>{{ project.client.name }}</span>{% endif %}
+        {% if project.owner %}<span><i class="bi bi-person me-1"></i>{{ project.owner.name }}</span>{% endif %}
+        {% if project.end_date %}<span {% if project.is_overdue %}style="color:#DC3545;font-weight:600;"{% endif %}><i class="bi bi-calendar2 me-1"></i>Due {{ project.end_date.strftime('%b %d, %Y') }}</span>{% endif %}
+        <span><i class="bi bi-list-task me-1"></i>{{ done_tasks }}/{{ total_tasks }} tasks done</span>
+      </div>
+    </div>
+    <!-- Progress ring -->
+    <div class="text-center" style="min-width:80px;">
+      <svg width="72" height="72" viewBox="0 0 72 72">
+        <circle cx="36" cy="36" r="28" fill="none" stroke="#EEF1F6" stroke-width="8"/>
+        <circle cx="36" cy="36" r="28" fill="none" stroke="var(--rts-blue)" stroke-width="8"
+                stroke-dasharray="{{ (project.progress / 100 * 175.9)|int }} 175.9"
+                stroke-dashoffset="44" stroke-linecap="round"
+                transform="rotate(-90 36 36)"/>
+        <text x="36" y="41" text-anchor="middle"
+              style="font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;fill:#233C6E;">
+          {{ project.progress }}%
+        </text>
+      </svg>
     </div>
   </div>
 
-  <!-- Progress + task stats -->
-  <div class="col-lg-4">
-    <div class="card h-100">
-      <div class="card-body d-flex flex-column justify-content-center">
-        <div class="text-center mb-3">
-          <div style="font-family:'Oswald',sans-serif;font-size:3rem;font-weight:700;color:var(--rts-navy);line-height:1;">
-            {{ project.progress }}%
-          </div>
-          <div style="font-size:11.5px;color:var(--rts-gray);text-transform:uppercase;letter-spacing:.05em;">Progreso</div>
-        </div>
-        <div class="progress mb-4" style="height:12px;border-radius:6px;">
-          <div class="progress-bar" style="width:{{ project.progress }}%;border-radius:6px;"></div>
-        </div>
-        <div class="row g-2 text-center">
-          <div class="col-4">
-            <div style="font-family:'Oswald',sans-serif;font-size:1.6rem;font-weight:600;color:#28A745;">{{ done_tasks }}</div>
-            <div style="font-size:10px;color:var(--rts-gray);text-transform:uppercase;">Listas</div>
-          </div>
-          <div class="col-4">
-            <div style="font-family:'Oswald',sans-serif;font-size:1.6rem;font-weight:600;color:var(--rts-blue);">{{ open_tasks }}</div>
-            <div style="font-size:10px;color:var(--rts-gray);text-transform:uppercase;">Abiertas</div>
-          </div>
-          <div class="col-4">
-            <div style="font-family:'Oswald',sans-serif;font-size:1.6rem;font-weight:600;color:#DC3545;">{{ overdue_tasks }}</div>
-            <div style="font-size:10px;color:var(--rts-gray);text-transform:uppercase;">Vencidas</div>
-          </div>
-        </div>
-        {% if total_tasks > 0 %}
-        <div style="font-size:11px;color:var(--rts-gray);text-align:center;margin-top:10px;">
-          Completado automático: {{ calc_progress }}%
-          <span style="font-size:10px;">({{ done_tasks }}/{{ total_tasks }} tareas)</span>
-        </div>
-        {% endif %}
-      </div>
-    </div>
+  <!-- Progress bar -->
+  <div class="progress mt-3" style="height:6px;">
+    <div class="progress-bar" style="width:{{ project.progress }}%;"></div>
   </div>
 </div>
 
-<!-- ── Tasks ──────────────────────────────────────────────────────────────── -->
-<div class="row g-4 mb-4">
-  <div class="col-12">
-    <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-list-task me-2"></i>Tareas ({{ project.tasks|length }})</span>
-        <button class="btn btn-rts btn-sm" data-bs-toggle="modal" data-bs-target="#newTaskModal">
-          <i class="bi bi-plus-lg me-1"></i>Nueva Tarea
-        </button>
-      </div>
-
-      {% if project.tasks %}
-      <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-          <thead>
-            <tr>
-              <th style="width:36px;"></th>
-              <th>Tarea</th>
-              <th>Estado</th>
-              <th>Prioridad</th>
-              <th>Asignado a</th>
-              <th>Vencimiento</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for t in project.tasks %}
-            <tr class="{% if t.status == 'done' %}text-muted{% endif %}">
-              <td>
-                <!-- Quick status toggle to done -->
-                <form method="post" action="{{ url_for('projects.task_status', id=project.id, task_id=t.id) }}">
-                  <input type="hidden" name="status" value="{{ 'pending' if t.status == 'done' else 'done' }}">
-                  <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"
-                          title="{{ 'Marcar pendiente' if t.status == 'done' else 'Marcar completada' }}"
-                          style="font-size:18px;color:{{ '#28A745' if t.status == 'done' else '#CCC' }};">
-                    <i class="bi bi-{{ 'check-circle-fill' if t.status == 'done' else 'circle' }}"></i>
-                  </button>
-                </form>
-              </td>
-              <td>
-                <div style="font-size:13px;font-weight:600;{% if t.status == 'done' %}text-decoration:line-through;color:var(--rts-gray);{% else %}color:var(--rts-navy);{% endif %}">
-                  {{ t.title }}
-                </div>
-                {% if t.description %}
-                <div style="font-size:11.5px;color:var(--rts-gray);">{{ t.description[:60] }}{% if t.description|length > 60 %}…{% endif %}</div>
-                {% endif %}
-              </td>
-              <td>
-                <span class="badge bg-{{ TASK_STATUS_BADGES[t.status] }}">{{ TASK_STATUS_LABELS[t.status] }}</span>
-              </td>
-              <td>
-                <span class="badge bg-{{ PRIORITY_BADGES[t.priority] }}">{{ PRIORITY_LABELS[t.priority] }}</span>
-              </td>
-              <td style="font-size:12.5px;">{{ t.assigned_to.name if t.assigned_to else '—' }}</td>
-              <td style="font-size:12px;{% if t.is_overdue %}color:#DC3545;font-weight:600;{% endif %}">
-                {% if t.due_date %}
-                  {% if t.is_overdue %}<i class="bi bi-exclamation-triangle me-1"></i>{% endif %}
-                  {{ t.due_date.strftime('%d/%m/%Y') }}
-                {% else %}—{% endif %}
-              </td>
-              <td class="text-end">
-                <button class="btn btn-sm btn-outline-secondary" title="Editar tarea"
-                        data-bs-toggle="modal"
-                        data-bs-target="#editTaskModal{{ t.id }}">
-                  <i class="bi bi-pencil"></i>
-                </button>
-                <form method="post"
-                      action="{{ url_for('projects.task_delete', id=project.id, task_id=t.id) }}"
-                      class="d-inline"
-                      onsubmit="return confirm('¿Eliminar esta tarea?');">
-                  <button class="btn btn-sm btn-outline-danger ms-1" title="Eliminar">
-                    <i class="bi bi-trash"></i>
-                  </button>
-                </form>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% else %}
-      <div class="card-body">
-        <div class="empty-state" style="padding:30px;">
-          <i class="bi bi-list-task"></i>
-          <p>No hay tareas en este proyecto.</p>
-          <button class="btn btn-rts btn-sm" data-bs-toggle="modal" data-bs-target="#newTaskModal">
-            <i class="bi bi-plus-lg me-1"></i>Agregar primera tarea
-          </button>
-        </div>
-      </div>
+<!-- ── Tab navigation ────────────────────────────────────────────────────── -->
+<ul class="nav nav-tabs mb-0" id="projectTabs" role="tablist"
+    style="border-bottom:2px solid var(--rts-border);">
+  {% for slug, label, icon in [
+      ('board',    'Board',    'bi-kanban'),
+      ('backlog',  'Backlog',  'bi-list-task'),
+      ('overview', 'Overview', 'bi-info-circle'),
+      ('activity', 'Activity', 'bi-clock-history'),
+      ('team',     'Team',     'bi-people'),
+  ] %}
+  <li class="nav-item" role="presentation">
+    <a class="nav-link {% if tab == slug %}active{% endif %}"
+       href="{{ url_for('projects.project_detail', id=project.id, tab=slug) }}"
+       style="font-family:'Aptos','Calibri',sans-serif;font-size:13px;font-weight:{% if tab==slug %}700{% else %}500{% endif %};">
+      <i class="bi {{ icon }} me-1"></i>{{ label }}
+      {% if slug == 'backlog' and open_tasks > 0 %}
+      <span class="badge bg-primary ms-1" style="font-size:10px;">{{ open_tasks }}</span>
       {% endif %}
-    </div>
-  </div>
-</div>
+      {% if slug == 'team' %}
+      <span class="badge bg-secondary ms-1" style="font-size:10px;">{{ project.members|length }}</span>
+      {% endif %}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
 
-<!-- ── Team Members ───────────────────────────────────────────────────────── -->
-<div class="row g-4">
-  <div class="col-lg-6">
-    <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-people me-2"></i>Equipo ({{ project.members|length }})</span>
-        {% if available_users %}
-        <button class="btn btn-rts btn-sm" data-bs-toggle="modal" data-bs-target="#addMemberModal">
-          <i class="bi bi-person-plus me-1"></i>Agregar
-        </button>
-        {% endif %}
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: BOARD (Kanban) -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+{% if tab == 'board' %}
+<div class="mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <span style="font-size:12.5px;color:var(--rts-gray);">
+      {{ total_tasks }} task{{ 's' if total_tasks != 1 }} total
+    </span>
+    <button class="btn btn-rts btn-sm" data-bs-toggle="modal" data-bs-target="#newTaskModal">
+      <i class="bi bi-plus-lg me-1"></i>Add Task
+    </button>
+  </div>
+
+  <div class="kanban-board" id="kanbanBoard">
+    {% for status_key, status_label in [
+        ('pending',     'To Do'),
+        ('in_progress', 'In Progress'),
+        ('review',      'In Review'),
+        ('done',        'Done'),
+    ] %}
+    <div class="kanban-col">
+      <div class="kanban-col-header status-{{ status_key }}">
+        <span>{{ status_label }}</span>
+        <span class="kanban-count">{{ tasks_by_status.get(status_key, [])|length }}</span>
       </div>
-      {% if project.members %}
-      <ul class="list-group list-group-flush">
-        {% for m in project.members %}
-        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
-          <div class="d-flex align-items-center gap-2">
-            <div style="width:32px;height:32px;border-radius:50%;background:var(--rts-navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:13px;">
-              {{ m.user.name[0].upper() if m.user else '?' }}
-            </div>
-            <div>
-              <div style="font-size:13px;font-weight:600;color:var(--rts-navy);">{{ m.user.name if m.user else '?' }}</div>
-              <div style="font-size:11px;color:var(--rts-gray);">{{ m.user.email if m.user else '' }}</div>
+      <div class="kanban-drop-zone"
+           id="zone-{{ status_key }}"
+           data-status="{{ status_key }}">
+        {% for task in tasks_by_status.get(status_key, []) %}
+        <div class="kanban-card priority-{{ task.priority }}"
+             data-task-id="{{ task.id }}"
+             data-bs-toggle="modal"
+             data-bs-target="#taskModal{{ task.id }}"
+             title="Click to open task">
+          <div class="kc-priority-bar"></div>
+          <div class="kc-body">
+            <div class="kc-title">{{ task.title }}</div>
+            {% if task.description %}
+            <div class="kc-desc">{{ task.description[:80] }}{% if task.description|length > 80 %}…{% endif %}</div>
+            {% endif %}
+            <div class="kc-meta">
+              {% if task.assigned_to %}
+              <span class="kc-avatar" title="{{ task.assigned_to.name }}">
+                {{ task.assigned_to.name[:2].upper() }}
+              </span>
+              {% else %}
+              <span class="kc-avatar unassigned" title="Unassigned">?</span>
+              {% endif %}
+              <span class="kc-badges">
+                {% if task.is_overdue %}
+                <span title="Overdue" style="color:#DC3545;font-size:11px;"><i class="bi bi-exclamation-triangle"></i></span>
+                {% elif task.due_date %}
+                <span style="font-size:10.5px;color:var(--rts-gray);"><i class="bi bi-calendar2"></i> {{ task.due_date.strftime('%b %d') }}</span>
+                {% endif %}
+                {% if task.comments %}
+                <span style="font-size:10.5px;color:var(--rts-gray);"><i class="bi bi-chat"></i> {{ task.comments|length }}</span>
+                {% endif %}
+              </span>
             </div>
           </div>
-          <div class="d-flex align-items-center gap-2">
-            <span class="badge bg-{{ 'primary' if m.role == 'manager' else 'secondary' }}">
-              {{ 'Manager' if m.role == 'manager' else 'Miembro' }}
-            </span>
-            {% if m.user_id != project.owner_id %}
-            <form method="post" action="{{ url_for('projects.member_remove', id=project.id, member_id=m.id) }}"
-                  onsubmit="return confirm('¿Remover a {{ m.user.name if m.user else '' }}?');">
-              <button class="btn btn-sm btn-outline-danger p-1" style="line-height:1;" title="Remover">
-                <i class="bi bi-x"></i>
+        </div>
+        {% endfor %}
+        {% if not tasks_by_status.get(status_key) %}
+        <div class="kanban-empty">Drop tasks here</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+    <!-- Cancelled column (compact) -->
+    {% if tasks_by_status.get('cancelled') %}
+    <div class="kanban-col kanban-col-cancelled">
+      <div class="kanban-col-header status-cancelled">
+        <span>Cancelled</span>
+        <span class="kanban-count">{{ tasks_by_status.get('cancelled', [])|length }}</span>
+      </div>
+      <div class="kanban-drop-zone" id="zone-cancelled" data-status="cancelled">
+        {% for task in tasks_by_status.get('cancelled', []) %}
+        <div class="kanban-card priority-{{ task.priority }} cancelled-card"
+             data-task-id="{{ task.id }}"
+             data-bs-toggle="modal"
+             data-bs-target="#taskModal{{ task.id }}">
+          <div class="kc-priority-bar"></div>
+          <div class="kc-body">
+            <div class="kc-title" style="text-decoration:line-through;opacity:.6;">{{ task.title }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: BACKLOG (task list) -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+{% if tab == 'backlog' %}
+<div class="mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <span style="font-size:12.5px;color:var(--rts-gray);">{{ total_tasks }} tasks</span>
+    <button class="btn btn-rts btn-sm" data-bs-toggle="modal" data-bs-target="#newTaskModal">
+      <i class="bi bi-plus-lg me-1"></i>Add Task
+    </button>
+  </div>
+  {% if project.tasks %}
+  <div class="card">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th style="width:36px;"></th>
+          <th>Task</th>
+          <th>Status</th>
+          <th>Priority</th>
+          <th>Assigned to</th>
+          <th>Due Date</th>
+          <th>Comments</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in project.tasks %}
+        <tr class="{% if t.status == 'done' %}text-muted{% endif %}">
+          <td>
+            <form method="post" action="{{ url_for('projects.task_status', id=project.id, task_id=t.id) }}">
+              <input type="hidden" name="status" value="{{ 'pending' if t.status == 'done' else 'done' }}">
+              <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"
+                      style="font-size:18px;color:{{ '#28A745' if t.status == 'done' else '#CCC' }};">
+                <i class="bi bi-{{ 'check-circle-fill' if t.status == 'done' else 'circle' }}"></i>
               </button>
             </form>
-            {% endif %}
+          </td>
+          <td>
+            <div style="font-size:13px;font-weight:600;{% if t.status=='done' %}text-decoration:line-through;color:var(--rts-gray);{% else %}color:var(--rts-navy);{% endif %}"
+                 data-bs-toggle="modal" data-bs-target="#taskModal{{ t.id }}"
+                 style="cursor:pointer;">{{ t.title }}</div>
+            {% if t.description %}<div style="font-size:11.5px;color:var(--rts-gray);">{{ t.description[:60] }}{% if t.description|length > 60 %}…{% endif %}</div>{% endif %}
+          </td>
+          <td><span class="badge bg-{{ TASK_STATUS_BADGES[t.status] }}">{{ TASK_STATUS_LABELS[t.status] }}</span></td>
+          <td><span class="badge bg-{{ PRIORITY_BADGES[t.priority] }}">{{ PRIORITY_LABELS[t.priority] }}</span></td>
+          <td style="font-size:12.5px;">{{ t.assigned_to.name if t.assigned_to else '—' }}</td>
+          <td style="font-size:12px;{% if t.is_overdue %}color:#DC3545;font-weight:600;{% endif %}">
+            {% if t.due_date %}{% if t.is_overdue %}<i class="bi bi-exclamation-triangle me-1"></i>{% endif %}{{ t.due_date.strftime('%b %d, %Y') }}{% else %}—{% endif %}
+          </td>
+          <td style="font-size:12px;color:var(--rts-gray);">
+            {% if t.comments %}<i class="bi bi-chat me-1"></i>{{ t.comments|length }}{% else %}—{% endif %}
+          </td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-secondary"
+                    data-bs-toggle="modal" data-bs-target="#taskModal{{ t.id }}">
+              <i class="bi bi-eye"></i>
+            </button>
+            <form method="post" action="{{ url_for('projects.task_delete', id=project.id, task_id=t.id) }}"
+                  class="d-inline" onsubmit="return confirm('Delete this task?');">
+              <button class="btn btn-sm btn-outline-danger ms-1"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state"><i class="bi bi-list-task"></i><p>No tasks yet.</p>
+    <button class="btn btn-rts btn-sm" data-bs-toggle="modal" data-bs-target="#newTaskModal">
+      <i class="bi bi-plus-lg me-1"></i>Add first task</button></div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: OVERVIEW -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+{% if tab == 'overview' %}
+<div class="mt-3 row g-4">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-info-circle me-2"></i>Project Details</div>
+      <div class="card-body">
+        {% if project.description %}
+        <p style="font-size:14px;line-height:1.7;color:var(--rts-text);">{{ project.description }}</p>
+        {% else %}<p style="color:var(--rts-gray);font-size:13.5px;font-style:italic;">No description.</p>{% endif %}
+        <div class="row g-3 mt-1">
+          {% for label, value in [
+            ('Client', project.client.name if project.client else '—'),
+            ('Owner', project.owner.name if project.owner else '—'),
+            ('Start Date', project.start_date.strftime('%B %d, %Y') if project.start_date else '—'),
+            ('End Date', project.end_date.strftime('%B %d, %Y') if project.end_date else '—'),
+            ('Budget', ('$' + '{:,.0f}'.format(project.budget) + ' MXN') if project.budget else '—'),
+            ('Members', project.members|length),
+          ] %}
+          <div class="col-sm-4">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);margin-bottom:3px;">{{ label }}</div>
+            <div style="font-size:13.5px;font-weight:600;color:var(--rts-navy);">{{ value }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-bar-chart me-2"></i>Task Summary</div>
+      <div class="card-body">
+        <div class="row g-2 text-center">
+          {% for label, val, color in [
+            ('Total',    total_tasks,   'var(--rts-navy)'),
+            ('Done',     done_tasks,    '#28A745'),
+            ('Open',     open_tasks,    'var(--rts-blue)'),
+            ('Overdue',  overdue_tasks, '#DC3545'),
+          ] %}
+          <div class="col-6">
+            <div style="font-family:'Oswald',sans-serif;font-size:2rem;font-weight:700;color:{{ color }};">{{ val }}</div>
+            <div style="font-size:10.5px;text-transform:uppercase;color:var(--rts-gray);letter-spacing:.05em;">{{ label }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% if total_tasks %}
+        <div class="progress mt-3" style="height:8px;">
+          <div class="progress-bar bg-success" style="width:{{ (done_tasks/total_tasks*100)|int }}%;"></div>
+          <div class="progress-bar bg-primary" style="width:{{ ((open_tasks-overdue_tasks)/total_tasks*100)|int if open_tasks>overdue_tasks else 0 }}%;"></div>
+          <div class="progress-bar bg-danger" style="width:{{ (overdue_tasks/total_tasks*100)|int }}%;"></div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: ACTIVITY -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+{% if tab == 'activity' %}
+<div class="mt-3">
+  {% if activities %}
+  <div class="card">
+    <div class="card-header"><i class="bi bi-clock-history me-2"></i>Activity Feed</div>
+    <div class="card-body p-0">
+      <ul class="activity-feed">
+        {% for act in activities %}
+        <li class="activity-item">
+          <div class="act-icon bg-{{ act.color or 'secondary' }}">
+            <i class="bi bi-{{ act.icon or 'circle' }}"></i>
+          </div>
+          <div class="act-body">
+            <div class="act-text">
+              <strong>{{ act.user_name }}</strong>
+              {{ act.action.replace('_', ' ') }}
+              {% if act.entity_name %}<em>{{ act.entity_name }}</em>{% endif %}
+            </div>
+            {% if act.details %}<div class="act-detail">{{ act.details }}</div>{% endif %}
+            <div class="act-time">{{ act.created_at.strftime('%b %d, %Y · %H:%M') }}</div>
           </div>
         </li>
         {% endfor %}
       </ul>
-      {% else %}
-      <div class="card-body">
-        <div class="empty-state" style="padding:20px;"><i class="bi bi-people"></i><p>Sin miembros asignados.</p></div>
-      </div>
-      {% endif %}
     </div>
   </div>
+  {% else %}
+  <div class="empty-state"><i class="bi bi-clock-history"></i><p>No activity yet.</p></div>
+  {% endif %}
 </div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: TEAM -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+{% if tab == 'team' %}
+<div class="mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <span style="font-size:12.5px;color:var(--rts-gray);">{{ project.members|length }} member{{ 's' if project.members|length != 1 }}</span>
+    {% if available_users %}
+    <button class="btn btn-rts btn-sm" data-bs-toggle="modal" data-bs-target="#addMemberModal">
+      <i class="bi bi-person-plus me-1"></i>Add Member
+    </button>
+    {% endif %}
+  </div>
+  {% if project.members %}
+  <div class="row g-3">
+    {% for m in project.members %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card">
+        <div class="card-body d-flex align-items-center gap-3 py-3">
+          <div class="member-avatar">{{ m.user.name[:2].upper() if m.user else '?' }}</div>
+          <div class="flex-grow-1 min-w-0">
+            <div style="font-weight:600;font-size:13.5px;color:var(--rts-navy);">{{ m.user.name if m.user else '?' }}</div>
+            <div style="font-size:11.5px;color:var(--rts-gray);">{{ m.user.email if m.user else '' }}</div>
+            <span class="badge bg-{{ 'primary' if m.role == 'manager' else 'secondary' }} mt-1">
+              {{ 'Manager' if m.role == 'manager' else 'Member' }}
+            </span>
+          </div>
+          {% if m.user_id != project.owner_id %}
+          <form method="post" action="{{ url_for('projects.member_remove', id=project.id, member_id=m.id) }}"
+                onsubmit="return confirm('Remove {{ m.user.name if m.user else '' }}?');">
+            <button class="btn btn-sm btn-outline-danger" title="Remove"><i class="bi bi-x-lg"></i></button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state"><i class="bi bi-people"></i><p>No team members yet.</p></div>
+  {% endif %}
+</div>
+{% endif %}
 
 
-<!-- ══════ MODALS ══════════════════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════ MODALS ════════ -->
 
 <!-- New Task Modal -->
 <div class="modal fade" id="newTaskModal" tabindex="-1">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Nueva Tarea</h5>
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>New Task</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form method="post" action="{{ url_for('projects.task_new', id=project.id) }}">
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label">Título <span class="text-danger">*</span></label>
-            <input type="text" name="title" class="form-control" required placeholder="Describir la tarea…">
+            <label class="form-label">Title <span class="text-danger">*</span></label>
+            <input type="text" name="title" class="form-control" required autofocus placeholder="Describe the task…">
           </div>
           <div class="mb-3">
-            <label class="form-label">Descripción</label>
-            <textarea name="description" class="form-control" rows="2"></textarea>
+            <label class="form-label">Description</label>
+            <textarea name="description" class="form-control" rows="2" placeholder="Optional details…"></textarea>
           </div>
           <div class="row g-3">
             <div class="col-md-4">
-              <label class="form-label">Estado</label>
+              <label class="form-label">Status</label>
               <select name="status" class="form-select">
-                <option value="pending">Pendiente</option>
-                <option value="in_progress">En Progreso</option>
-                <option value="review">En Revisión</option>
-                <option value="done">Listo</option>
+                <option value="pending" selected>To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="review">In Review</option>
+                <option value="done">Done</option>
               </select>
             </div>
             <div class="col-md-4">
-              <label class="form-label">Prioridad</label>
+              <label class="form-label">Priority</label>
               <select name="priority" class="form-select">
-                <option value="low">🟢 Baja</option>
-                <option value="medium" selected>🔵 Media</option>
-                <option value="high">🟠 Alta</option>
-                <option value="critical">🔴 Crítica</option>
+                <option value="low">🟢 Low</option>
+                <option value="medium" selected>🔵 Medium</option>
+                <option value="high">🟠 High</option>
+                <option value="critical">🔴 Critical</option>
               </select>
             </div>
             <div class="col-md-4">
-              <label class="form-label">Asignar a</label>
+              <label class="form-label">Assign to</label>
               <select name="assigned_to_id" class="form-select">
-                <option value="">— Sin asignar —</option>
-                {% for u in users %}
-                <option value="{{ u.id }}">{{ u.name }}</option>
-                {% endfor %}
+                <option value="">— Unassigned —</option>
+                {% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
               </select>
             </div>
           </div>
           <div class="mt-3">
-            <label class="form-label">Fecha de Vencimiento</label>
+            <label class="form-label">Due Date</label>
             <input type="date" name="due_date" class="form-control">
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-rts"><i class="bi bi-check-lg me-1"></i>Crear Tarea</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-rts"><i class="bi bi-plus-lg me-1"></i>Create Task</button>
         </div>
       </form>
     </div>
   </div>
 </div>
 
-<!-- Edit Task Modals -->
+<!-- Task Detail + Comment Modals -->
 {% for t in project.tasks %}
-<div class="modal fade" id="editTaskModal{{ t.id }}" tabindex="-1">
-  <div class="modal-dialog modal-lg">
+<div class="modal fade" id="taskModal{{ t.id }}" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar Tarea</h5>
+      <div class="modal-header" style="border-bottom:3px solid {{ PRIORITY_COLORS[t.priority] }};">
+        <div>
+          <h5 class="modal-title mb-1">{{ t.title }}</h5>
+          <div class="d-flex gap-2">
+            <span class="badge bg-{{ TASK_STATUS_BADGES[t.status] }}">{{ TASK_STATUS_LABELS[t.status] }}</span>
+            <span class="badge bg-{{ PRIORITY_BADGES[t.priority] }}">{{ PRIORITY_LABELS[t.priority] }}</span>
+            {% if t.is_overdue %}<span class="badge bg-danger">Overdue</span>{% endif %}
+          </div>
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <form method="post" action="{{ url_for('projects.task_edit', id=project.id, task_id=t.id) }}">
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label">Título <span class="text-danger">*</span></label>
-            <input type="text" name="title" class="form-control" required value="{{ t.title }}">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Descripción</label>
-            <textarea name="description" class="form-control" rows="2">{{ t.description or '' }}</textarea>
-          </div>
-          <div class="row g-3">
-            <div class="col-md-4">
-              <label class="form-label">Estado</label>
-              <select name="status" class="form-select">
-                {% for s in ['pending','in_progress','review','done','cancelled'] %}
-                <option value="{{ s }}" {% if t.status == s %}selected{% endif %}>{{ TASK_STATUS_LABELS[s] }}</option>
-                {% endfor %}
-              </select>
+      <div class="modal-body p-0">
+
+        <!-- Two-column layout -->
+        <div class="row g-0" style="min-height:420px;">
+
+          <!-- Left: details + comments -->
+          <div class="col-md-8 p-4" style="border-right:1px solid var(--rts-border);">
+
+            {% if t.description %}
+            <p style="font-size:13.5px;color:var(--rts-text);line-height:1.65;margin-bottom:18px;">{{ t.description }}</p>
+            {% endif %}
+
+            <!-- Comments thread -->
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--rts-gray);margin-bottom:10px;font-weight:700;">
+              <i class="bi bi-chat me-1"></i>Comments ({{ t.comments|length }})
             </div>
-            <div class="col-md-4">
-              <label class="form-label">Prioridad</label>
-              <select name="priority" class="form-select">
-                {% for p in ['low','medium','high','critical'] %}
-                <option value="{{ p }}" {% if t.priority == p %}selected{% endif %}>{{ PRIORITY_LABELS[p] }}</option>
-                {% endfor %}
-              </select>
+
+            {% for c in t.comments|sort(attribute='created_at') %}
+            <div class="comment-bubble">
+              <div class="comment-avatar">{{ c.user_name[:2].upper() }}</div>
+              <div class="comment-content">
+                <div class="comment-header">
+                  <strong>{{ c.user_name }}</strong>
+                  <span>{{ c.created_at.strftime('%b %d · %H:%M') }}</span>
+                </div>
+                <div class="comment-text">{{ c.content }}</div>
+              </div>
             </div>
-            <div class="col-md-4">
-              <label class="form-label">Asignar a</label>
-              <select name="assigned_to_id" class="form-select">
-                <option value="">— Sin asignar —</option>
-                {% for u in users %}
-                <option value="{{ u.id }}" {% if t.assigned_to_id == u.id %}selected{% endif %}>{{ u.name }}</option>
-                {% endfor %}
-              </select>
-            </div>
+            {% else %}
+            <p style="font-size:12.5px;color:var(--rts-gray);font-style:italic;margin-bottom:16px;">No comments yet.</p>
+            {% endfor %}
+
+            <!-- Add comment -->
+            <form method="post" action="{{ url_for('projects.task_comment', id=project.id, task_id=t.id) }}"
+                  class="mt-3">
+              <div class="input-group">
+                <input type="text" name="content" class="form-control"
+                       placeholder="Leave a comment…" required
+                       style="font-size:13px;">
+                <button type="submit" class="btn btn-rts">
+                  <i class="bi bi-send"></i>
+                </button>
+              </div>
+            </form>
           </div>
-          <div class="mt-3">
-            <label class="form-label">Fecha de Vencimiento</label>
-            <input type="date" name="due_date" class="form-control"
-                   value="{{ t.due_date.isoformat() if t.due_date else '' }}">
+
+          <!-- Right: edit panel -->
+          <div class="col-md-4 p-4 bg-light">
+            <form method="post" action="{{ url_for('projects.task_edit', id=project.id, task_id=t.id) }}">
+              <div class="mb-3">
+                <label class="form-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);">Title</label>
+                <input type="text" name="title" class="form-control form-control-sm" value="{{ t.title }}" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);">Status</label>
+                <select name="status" class="form-select form-select-sm">
+                  {% for s, lbl in TASK_STATUS_LABELS.items() %}
+                  <option value="{{ s }}" {% if t.status == s %}selected{% endif %}>{{ lbl }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);">Priority</label>
+                <select name="priority" class="form-select form-select-sm">
+                  {% for p, lbl in PRIORITY_LABELS.items() %}
+                  <option value="{{ p }}" {% if t.priority == p %}selected{% endif %}>{{ lbl }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);">Assigned to</label>
+                <select name="assigned_to_id" class="form-select form-select-sm">
+                  <option value="">— Unassigned —</option>
+                  {% for u in users %}
+                  <option value="{{ u.id }}" {% if t.assigned_to_id == u.id %}selected{% endif %}>{{ u.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);">Due Date</label>
+                <input type="date" name="due_date" class="form-control form-control-sm"
+                       value="{{ t.due_date.isoformat() if t.due_date else '' }}">
+              </div>
+              <div class="mb-3">
+                <label class="form-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);">Description</label>
+                <textarea name="description" class="form-control form-control-sm" rows="3">{{ t.description or '' }}</textarea>
+              </div>
+              <button type="submit" class="btn btn-rts btn-sm w-100">
+                <i class="bi bi-check-lg me-1"></i>Save Changes
+              </button>
+            </form>
+            <hr>
+            <form method="post" action="{{ url_for('projects.task_delete', id=project.id, task_id=t.id) }}"
+                  onsubmit="return confirm('Delete this task permanently?');">
+              <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+                <i class="bi bi-trash me-1"></i>Delete Task
+              </button>
+            </form>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-rts"><i class="bi bi-check-lg me-1"></i>Guardar Cambios</button>
-        </div>
-      </form>
+      </div>
     </div>
   </div>
 </div>
@@ -390,31 +590,29 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Agregar Miembro</h5>
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Add Team Member</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form method="post" action="{{ url_for('projects.member_add', id=project.id) }}">
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label">Usuario</label>
+            <label class="form-label">User</label>
             <select name="user_id" class="form-select" required>
-              <option value="">— Seleccionar —</option>
-              {% for u in available_users %}
-              <option value="{{ u.id }}">{{ u.name }} ({{ u.username }})</option>
-              {% endfor %}
+              <option value="">— Select user —</option>
+              {% for u in available_users %}<option value="{{ u.id }}">{{ u.name }} ({{ u.username }})</option>{% endfor %}
             </select>
           </div>
           <div class="mb-3">
-            <label class="form-label">Rol en el proyecto</label>
+            <label class="form-label">Role</label>
             <select name="role" class="form-select">
-              <option value="member">Miembro</option>
+              <option value="member">Member</option>
               <option value="manager">Manager</option>
             </select>
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-rts"><i class="bi bi-check-lg me-1"></i>Agregar</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-rts"><i class="bi bi-check-lg me-1"></i>Add</button>
         </div>
       </form>
     </div>
@@ -427,26 +625,75 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Eliminar Proyecto</h5>
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Delete Project</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <p>¿Estás seguro de que quieres eliminar el proyecto <strong>{{ project.name }}</strong>?</p>
-        <p class="text-danger" style="font-size:13px;">
-          <i class="bi bi-exclamation-triangle me-1"></i>
-          Esta acción eliminará también todas las tareas y miembros asociados. Es irreversible.
-        </p>
+        <p>Delete project <strong>{{ project.name }}</strong>?</p>
+        <p class="text-danger" style="font-size:13px;"><i class="bi bi-exclamation-triangle me-1"></i>This will permanently delete all tasks, comments, and members. Irreversible.</p>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <form method="post" action="{{ url_for('projects.project_delete', id=project.id) }}">
-          <button type="submit" class="btn btn-danger">
-            <i class="bi bi-trash me-1"></i>Eliminar definitivamente
-          </button>
+          <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete permanently</button>
         </form>
       </div>
     </div>
   </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<!-- SortableJS for Kanban drag-and-drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script>
+(function () {
+  const PROJECT_ID = {{ project.id }};
+
+  document.querySelectorAll('.kanban-drop-zone').forEach(zone => {
+    Sortable.create(zone, {
+      group:     'kanban',
+      animation: 150,
+      ghostClass:'kanban-ghost',
+      dragClass: 'kanban-drag',
+      onEnd: function (evt) {
+        const taskId   = evt.item.dataset.taskId;
+        const newStatus = evt.to.dataset.status;
+        const oldStatus = evt.from.dataset.status;
+        if (newStatus === oldStatus) return;
+
+        // AJAX update
+        fetch(`/projects/${PROJECT_ID}/tasks/${taskId}/status`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: `status=${encodeURIComponent(newStatus)}`,
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            // Update count badges
+            updateColCount(evt.from.id, -1);
+            updateColCount(evt.to.id,   +1);
+          }
+        })
+        .catch(err => console.error('Kanban update error:', err));
+      }
+    });
+  });
+
+  function updateColCount(zoneId, delta) {
+    const zone = document.getElementById(zoneId);
+    if (!zone) return;
+    const col   = zone.closest('.kanban-col');
+    const badge = col ? col.querySelector('.kanban-count') : null;
+    if (badge) {
+      badge.textContent = Math.max(0, parseInt(badge.textContent || '0') + delta);
+    }
+  }
+})();
+</script>
 {% endblock %}
