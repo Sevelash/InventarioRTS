@@ -31,6 +31,10 @@ app.register_blueprint(eval_bp)
 from repo import repo_bp
 app.register_blueprint(repo_bp)
 
+# ── Reports blueprint ─────────────────────────────────────────────────────────
+from reports import reports_bp
+app.register_blueprint(reports_bp)
+
 with app.app_context():
     db.create_all()
 

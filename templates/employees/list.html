@@ -4,6 +4,10 @@
 {% block page_title %}Empleados{% endblock %}
 
 {% block topbar_actions %}
+  <a href="{{ url_for('reports.export_employees') }}"
+     class="btn btn-outline-success btn-sm">
+    <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+  </a>
   <a href="{{ url_for('employee_new') }}" class="btn btn-rts btn-sm">
     <i class="bi bi-person-plus me-1"></i>Nuevo Empleado
   </a>

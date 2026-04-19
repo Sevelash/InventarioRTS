@@ -4,9 +4,63 @@
 {% block page_title %}Dashboard{% endblock %}
 
 {% block topbar_actions %}
-  <a href="{{ url_for('asset_new') }}" class="btn btn-rts btn-sm">
-    <i class="bi bi-plus-lg me-1"></i>{{ T.inv_new_asset }}
-  </a>
+  <div class="d-flex gap-2 align-items-center">
+    {% if active_dept %}
+    <span class="badge" style="background:{{ active_dept.color }};color:#fff;font-size:12px;padding:6px 10px;border-radius:8px;">
+      <i class="bi bi-building me-1"></i>{{ active_dept.name }}
+    </span>
+    {% endif %}
+    <!-- Download dropdown -->
+    <div class="dropdown">
+      <button class="btn btn-outline-success btn-sm dropdown-toggle" type="button"
+              data-bs-toggle="dropdown">
+        <i class="bi bi-file-earmark-excel me-1"></i>Download Report
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="font-size:13px;min-width:240px;">
+        <li>
+          <h6 class="dropdown-header" style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;">
+            Full Reports
+          </h6>
+        </li>
+        <li>
+          <a class="dropdown-item" href="{{ url_for('reports.export_dashboard') }}">
+            <i class="bi bi-layers me-2 text-primary"></i>
+            <span class="fw-semibold">Dashboard Summary</span>
+            <small class="d-block text-muted ps-4">KPIs · By Category · By Dept · Assignments · Shipments</small>
+          </a>
+        </li>
+        <li><hr class="dropdown-divider"></li>
+        <li>
+          <h6 class="dropdown-header" style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;">
+            Individual Lists
+          </h6>
+        </li>
+        <li>
+          <a class="dropdown-item" href="{{ url_for('reports.export_assets') }}">
+            <i class="bi bi-laptop me-2 text-info"></i>All Assets
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item" href="{{ url_for('reports.export_assignments') }}">
+            <i class="bi bi-person-check me-2 text-success"></i>Active Assignments
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item" href="{{ url_for('reports.export_shipments') }}">
+            <i class="bi bi-truck me-2 text-warning"></i>Shipments
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item" href="{{ url_for('reports.export_employees') }}">
+            <i class="bi bi-people me-2 text-secondary"></i>Employee Directory
+          </a>
+        </li>
+      </ul>
+    </div>
+    <a href="{{ url_for('asset_new') }}" class="btn btn-rts btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>{{ T.inv_new_asset }}
+    </a>
+  </div>
 {% endblock %}
 
 {% block content %}
