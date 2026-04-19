@@ -741,6 +741,33 @@ hr { border-color: var(--rts-border); }
   line-height: 1.4;
 }
 
+/* Locked / pending variant */
+.module-card--locked {
+  background: #f8f9fb;
+  border-color: #dde3ef;
+}
+.module-card--locked:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Request Access button inside locked card */
+.btn-request-access {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: transparent;
+  border: 1.5px solid var(--mod-color, var(--rts-blue));
+  color: var(--mod-color, var(--rts-blue));
+  transition: background .15s, color .15s;
+  cursor: pointer;
+}
+.btn-request-access:hover {
+  background: var(--mod-color, var(--rts-blue));
+  color: #fff;
+}
+
 .module-card-arrow {
   font-size: 1.4rem;
   color: var(--mod-color, var(--rts-blue));

@@ -10,6 +10,14 @@
   <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-people me-1"></i>Usuarios
   </a>
+  <a href="{{ url_for('admin.access_requests') }}" class="btn btn-outline-secondary btn-sm position-relative">
+    <i class="bi bi-key me-1"></i>Access Requests
+    {% if pending_requests %}
+    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:9px;">
+      {{ pending_requests }}
+    </span>
+    {% endif %}
+  </a>
   <a href="{{ url_for('admin.notifications') }}" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-bell me-1"></i>Notifications
   </a>
@@ -90,6 +98,15 @@
         </a>
         <a href="{{ url_for('admin.user_new') }}" class="btn btn-rts text-start">
           <i class="bi bi-plus-lg me-2"></i>Crear Nuevo Usuario
+        </a>
+        <a href="{{ url_for('admin.access_requests') }}" class="btn btn-outline-secondary text-start d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-key me-2"></i>Access Requests</span>
+          {% if pending_requests %}
+          <span class="badge bg-danger">{{ pending_requests }} pending</span>
+          {% endif %}
+        </a>
+        <a href="{{ url_for('admin.departments') }}" class="btn btn-outline-secondary text-start">
+          <i class="bi bi-building me-2"></i>Manage Departments
         </a>
         <a href="{{ url_for('admin.notifications') }}" class="btn btn-outline-secondary text-start">
           <i class="bi bi-bell me-2"></i>Notification Settings

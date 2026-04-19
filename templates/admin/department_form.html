@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Edit' if dept else 'New' }} Department — Admin RTS{% endblock %}
+{% block page_title %}{{ 'Edit' if dept else 'New' }} Department{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('admin.departments') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Departments
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <form method="post">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Department Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required
+                   value="{{ form.get('name', dept.name if dept else '') }}"
+                   placeholder="e.g. Marketing, Finance, HR">
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-sm-5">
+              <label class="form-label fw-semibold">Short Code <span class="text-danger">*</span></label>
+              <input type="text" name="code" class="form-control text-uppercase" required
+                     maxlength="10"
+                     value="{{ form.get('code', dept.code if dept else '') }}"
+                     placeholder="e.g. MKT">
+              <div class="form-text">Up to 10 characters, auto-uppercased.</div>
+            </div>
+            <div class="col-sm-7">
+              <label class="form-label fw-semibold">Brand Color</label>
+              <div class="input-group">
+                <input type="color" name="color" class="form-control form-control-color"
+                       value="{{ form.get('color', dept.color if dept else '#233C6E') }}"
+                       style="max-width:60px;">
+                <input type="text" class="form-control form-control-sm"
+                       id="colorHex"
+                       value="{{ form.get('color', dept.color if dept else '#233C6E') }}"
+                       readonly>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Manager Name</label>
+            <input type="text" name="manager_name" class="form-control"
+                   value="{{ form.get('manager_name', dept.manager_name if dept else '') }}"
+                   placeholder="e.g. Ana García">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Manager Email</label>
+            <input type="email" name="manager_email" class="form-control"
+                   value="{{ form.get('manager_email', dept.manager_email if dept else '') }}"
+                   placeholder="manager@company.com">
+          </div>
+
+          {% if dept %}
+          <div class="mb-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="active" value="1"
+                     id="active" {{ 'checked' if dept.active }}>
+              <label class="form-check-label" for="active">Active</label>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="d-flex gap-2 justify-content-end mt-4">
+            <a href="{{ url_for('admin.departments') }}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-floppy me-1"></i>{{ 'Save Changes' if dept else 'Create Department' }}
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const colorInput = document.querySelector('input[type="color"]');
+const hexInput   = document.getElementById('colorHex');
+colorInput.addEventListener('input', () => { hexInput.value = colorInput.value; });
+</script>
+{% endblock %}

@@ -1,16 +1,19 @@
 """
 RTS Asset Management — Panel de Administración
-  /admin/              → resumen
-  /admin/branding      → logo / remoties / favicon
-  /admin/users         → user management
-  /admin/notifications → Teams + Email notification settings
-  /admin/logs          → audit trail
+  /admin/                  → resumen
+  /admin/branding          → logo / remoties / favicon
+  /admin/users             → user management
+  /admin/departments       → department CRUD
+  /admin/access-requests   → approve / deny module access requests
+  /admin/notifications     → Teams + Email notification settings
+  /admin/logs              → audit trail
 """
 import os, json
+from datetime import datetime
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, flash, session, current_app)
 from werkzeug.utils import secure_filename
-from models import db, User, AuditLog, log_action
+from models import db, User, AuditLog, log_action, Department, AccessRequest, ALL_MODULES
 from auth import admin_required
 import notifications as notif
 
@@ -32,16 +35,18 @@ def _static_images():
 @admin_bp.route('/')
 @admin_required
 def index():
-    total_users   = User.query.count()
-    total_logs    = AuditLog.query.count()
-    recent_logs   = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(10).all()
-    images_dir    = _static_images()
+    total_users      = User.query.count()
+    total_logs       = AuditLog.query.count()
+    recent_logs      = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(10).all()
+    pending_requests = AccessRequest.query.filter_by(status='pending').count()
+    images_dir       = _static_images()
     logo_exists      = os.path.exists(os.path.join(images_dir, 'logo.png'))
     remoties_exists  = os.path.exists(os.path.join(images_dir, 'remoties.png'))
     favicon_exists   = os.path.exists(os.path.join(images_dir, 'favicon.png'))
     return render_template('admin/index.html',
                            total_users=total_users, total_logs=total_logs,
                            recent_logs=recent_logs,
+                           pending_requests=pending_requests,
                            logo_exists=logo_exists,
                            remoties_exists=remoties_exists,
                            favicon_exists=favicon_exists)
@@ -293,3 +298,155 @@ def logs():
                            entity_filter=entity_filter,
                            actions=sorted(actions),
                            entities=sorted(entities))
+
+
+# ── Departments ───────────────────────────────────────────────────────────────
+
+@admin_bp.route('/departments')
+@admin_required
+def departments():
+    depts = Department.query.order_by(Department.name).all()
+    return render_template('admin/departments.html', departments=depts)
+
+
+@admin_bp.route('/departments/new', methods=['GET', 'POST'])
+@admin_required
+def department_new():
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip().upper()
+        if Department.query.filter_by(code=code).first():
+            flash(f'Department code "{code}" already exists.', 'danger')
+            return render_template('admin/department_form.html', dept=None, form=request.form)
+        d = Department(
+            name=request.form.get('name', '').strip(),
+            code=code,
+            color=request.form.get('color', '#233C6E').strip(),
+            manager_name=request.form.get('manager_name', '').strip() or None,
+            manager_email=request.form.get('manager_email', '').strip() or None,
+        )
+        db.session.add(d)
+        log_action('create', 'department', entity_name=d.name,
+                   details=f'Department created: {code}')
+        db.session.commit()
+        flash(f'Department "{d.name}" created.', 'success')
+        return redirect(url_for('admin.departments'))
+    return render_template('admin/department_form.html', dept=None, form={})
+
+
+@admin_bp.route('/departments/<int:id>/edit', methods=['GET', 'POST'])
+@admin_required
+def department_edit(id):
+    d = Department.query.get_or_404(id)
+    if request.method == 'POST':
+        d.name          = request.form.get('name', '').strip()
+        d.code          = request.form.get('code', '').strip().upper()
+        d.color         = request.form.get('color', '#233C6E').strip()
+        d.manager_name  = request.form.get('manager_name', '').strip() or None
+        d.manager_email = request.form.get('manager_email', '').strip() or None
+        d.active        = 'active' in request.form
+        log_action('update', 'department', entity_id=d.id, entity_name=d.name)
+        db.session.commit()
+        flash(f'Department "{d.name}" updated.', 'success')
+        return redirect(url_for('admin.departments'))
+    return render_template('admin/department_form.html', dept=d, form={})
+
+
+@admin_bp.route('/departments/<int:id>/delete', methods=['POST'])
+@admin_required
+def department_delete(id):
+    d = Department.query.get_or_404(id)
+    name = d.name
+    log_action('delete', 'department', entity_id=d.id, entity_name=name)
+    db.session.delete(d)
+    db.session.commit()
+    flash(f'Department "{name}" deleted.', 'warning')
+    return redirect(url_for('admin.departments'))
+
+
+# ── Access Requests ───────────────────────────────────────────────────────────
+
+@admin_bp.route('/access-requests')
+@admin_required
+def access_requests():
+    status_filter = request.args.get('status', 'pending')
+    query = AccessRequest.query
+    if status_filter and status_filter != 'all':
+        query = query.filter_by(status=status_filter)
+    reqs = query.order_by(AccessRequest.created_at.desc()).all()
+    mod_names = {m['slug']: m['name'] for m in ALL_MODULES}
+    return render_template('admin/access_requests.html',
+                           requests=reqs,
+                           status_filter=status_filter,
+                           mod_names=mod_names,
+                           departments=Department.query.filter_by(active=True).all())
+
+
+@admin_bp.route('/access-requests/<int:id>/review', methods=['POST'])
+@admin_required
+def access_request_review(id):
+    req     = AccessRequest.query.get_or_404(id)
+    action  = request.form.get('action')          # approve | deny
+    notes   = request.form.get('admin_notes', '').strip()
+    dept_id = request.form.get('department_id', type=int)
+
+    if action not in ('approve', 'deny'):
+        flash('Invalid action.', 'danger')
+        return redirect(url_for('admin.access_requests'))
+
+    req.status      = 'approved' if action == 'approve' else 'denied'
+    req.admin_notes = notes
+    req.reviewed_by = session['user']['name']
+    req.reviewed_at = datetime.utcnow()
+
+    if action == 'approve':
+        # Grant the module to the user
+        user = User.query.get(req.user_id)
+        if user:
+            mods = user.get_modules()
+            if req.module_slug not in mods:
+                mods.append(req.module_slug)
+                user.set_modules(mods)
+            # Set department if provided
+            if dept_id:
+                user.department_id = dept_id
+            elif req.department_id:
+                user.department_id = req.department_id
+
+        log_action('update', 'access_request', entity_id=req.id,
+                   entity_name=req.user_name,
+                   details=f'Approved access to {req.module_slug}')
+
+        # Notify user by email
+        if user and user.email:
+            mod_name = next((m['name'] for m in ALL_MODULES if m['slug'] == req.module_slug),
+                            req.module_slug)
+            notif.send_email(
+                user.email,
+                f'[RTS] Access approved: {mod_name}',
+                f'Access Granted — {mod_name}',
+                f'Your request to access <b>{mod_name}</b> has been <b>approved</b> by {req.reviewed_by}.',
+                facts=[('Module', mod_name), ('Approved by', req.reviewed_by)],
+                url=notif._url(notif.load_config(), '/')
+            )
+    else:
+        log_action('update', 'access_request', entity_id=req.id,
+                   entity_name=req.user_name,
+                   details=f'Denied access to {req.module_slug}')
+        # Notify user of denial
+        user = User.query.get(req.user_id)
+        if user and user.email:
+            mod_name = next((m['name'] for m in ALL_MODULES if m['slug'] == req.module_slug),
+                            req.module_slug)
+            notif.send_email(
+                user.email,
+                f'[RTS] Access request update: {mod_name}',
+                f'Access Request Update — {mod_name}',
+                f'Your request to access <b>{mod_name}</b> was reviewed by {req.reviewed_by}.'
+                + (f'<br><br><b>Note:</b> {notes}' if notes else ''),
+                facts=[('Module', mod_name), ('Status', 'Not approved'),
+                       ('Reviewed by', req.reviewed_by)],
+            )
+
+    db.session.commit()
+    flash(f'Request {"approved" if action == "approve" else "denied"} for {req.user_name}.', 'success')
+    return redirect(url_for('admin.access_requests'))

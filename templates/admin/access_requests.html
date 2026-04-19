@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Access Requests — Admin RTS{% endblock %}
+{% block page_title %}Module Access Requests{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('admin.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Admin Panel
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filter tabs -->
+<ul class="nav nav-tabs mb-3" style="font-size:13px;">
+  {% for s, label in [('pending','Pending'), ('approved','Approved'), ('denied','Denied'), ('all','All')] %}
+  <li class="nav-item">
+    <a class="nav-link {{ 'active' if status_filter == s }}"
+       href="{{ url_for('admin.access_requests', status=s) }}">
+      {{ label }}
+      {% if s == 'pending' %}
+        {% set cnt = requests | selectattr('status','equalto','pending') | list | length if status_filter == 'all' else requests | length %}
+        {% if status_filter == 'pending' and requests %}
+          <span class="badge bg-warning text-dark ms-1">{{ requests | length }}</span>
+        {% endif %}
+      {% endif %}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+{% if requests %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" style="font-size:13px;">
+        <thead style="background:#F4F6FA;">
+          <tr>
+            <th class="ps-3">User</th>
+            <th>Module</th>
+            <th>Department</th>
+            <th>Reason</th>
+            <th>Requested</th>
+            <th>Status</th>
+            <th class="pe-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in requests %}
+          <tr>
+            <td class="ps-3">
+              <div class="fw-semibold">{{ r.user_name }}</div>
+              {% if r.user and r.user.email %}
+              <div style="font-size:11px;color:var(--rts-gray);">{{ r.user.email }}</div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge text-bg-primary" style="font-size:11px;">
+                {{ mod_names.get(r.module_slug, r.module_slug) }}
+              </span>
+            </td>
+            <td>
+              {% if r.department %}
+                <span class="badge" style="background:{{ r.department.color }};color:#fff;font-size:11px;">
+                  {{ r.department.code }}
+                </span>
+                {{ r.department.name }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td style="max-width:200px;">
+              <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;color:var(--rts-gray);">
+                {{ r.reason or '—' }}
+              </span>
+            </td>
+            <td style="white-space:nowrap;color:var(--rts-gray);">
+              {{ r.created_at.strftime('%d %b %Y') if r.created_at else '—' }}
+            </td>
+            <td>
+              {% if r.status == 'pending' %}
+                <span class="badge bg-warning text-dark">Pending</span>
+              {% elif r.status == 'approved' %}
+                <span class="badge bg-success">Approved</span>
+                {% if r.reviewed_by %}<div style="font-size:10.5px;color:var(--rts-gray);">by {{ r.reviewed_by }}</div>{% endif %}
+              {% else %}
+                <span class="badge bg-danger">Denied</span>
+                {% if r.reviewed_by %}<div style="font-size:10.5px;color:var(--rts-gray);">by {{ r.reviewed_by }}</div>{% endif %}
+              {% endif %}
+            </td>
+            <td class="pe-3">
+              {% if r.status == 'pending' %}
+              <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                      data-bs-toggle="modal"
+                      data-bs-target="#reviewModal{{ r.id }}">
+                <i class="bi bi-pencil-square me-1"></i>Review
+              </button>
+
+              <!-- Review Modal -->
+              <div class="modal fade" id="reviewModal{{ r.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                  <div class="modal-content">
+                    <div class="modal-header" style="background:var(--rts-navy);color:#fff;">
+                      <h6 class="modal-title" style="font-family:'Oswald',sans-serif;">
+                        Review Request — {{ r.user_name }}
+                      </h6>
+                      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                      <dl class="row mb-3" style="font-size:13px;">
+                        <dt class="col-4 text-muted">User</dt>
+                        <dd class="col-8 fw-semibold">{{ r.user_name }}</dd>
+                        <dt class="col-4 text-muted">Module</dt>
+                        <dd class="col-8">{{ mod_names.get(r.module_slug, r.module_slug) }}</dd>
+                        <dt class="col-4 text-muted">Reason</dt>
+                        <dd class="col-8">{{ r.reason or '—' }}</dd>
+                      </dl>
+
+                      <form method="post"
+                            action="{{ url_for('admin.access_request_review', id=r.id) }}">
+
+                        {% if departments %}
+                        <div class="mb-3">
+                          <label class="form-label form-label-sm fw-semibold">Assign Department</label>
+                          <select name="department_id" class="form-select form-select-sm">
+                            <option value="">— Keep existing / none —</option>
+                            {% for d in departments %}
+                            <option value="{{ d.id }}"
+                              {{ 'selected' if r.department_id == d.id }}>
+                              {{ d.name }} ({{ d.code }})
+                            </option>
+                            {% endfor %}
+                          </select>
+                          <div class="form-text">
+                            The user will see only assets tagged to this department in Inventory.
+                            Leave blank for full IT-level access.
+                          </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="mb-3">
+                          <label class="form-label form-label-sm fw-semibold">Note to user (optional)</label>
+                          <textarea name="admin_notes" class="form-control form-control-sm" rows="2"
+                                    placeholder="e.g. Access granted for Q2 audit purposes…"></textarea>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                          <button type="submit" name="action" value="approve"
+                                  class="btn btn-success btn-sm flex-fill">
+                            <i class="bi bi-check-lg me-1"></i>Approve
+                          </button>
+                          <button type="submit" name="action" value="deny"
+                                  class="btn btn-danger btn-sm flex-fill">
+                            <i class="bi bi-x-lg me-1"></i>Deny
+                          </button>
+                        </div>
+
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- /Review Modal -->
+
+              {% else %}
+                <span style="font-size:11.5px;color:var(--rts-gray);">
+                  {{ r.reviewed_at.strftime('%d %b') if r.reviewed_at else '' }}
+                </span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<div class="empty-state py-5">
+  <i class="bi bi-inbox" style="font-size:3rem;opacity:.2;display:block;margin-bottom:12px;color:var(--rts-navy);"></i>
+  <p style="font-size:14px;color:var(--rts-gray);">No {{ status_filter }} requests.</p>
+</div>
+{% endif %}
+
+{% endblock %}

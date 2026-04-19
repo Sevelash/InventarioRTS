@@ -4,6 +4,8 @@
 {% block page_title %}Portal RTS{% endblock %}
 
 {% block content %}
+
+<!-- Welcome -->
 <div class="portal-welcome mb-4">
   <h2 style="font-family:'Oswald',sans-serif;font-size:22px;color:var(--rts-navy);font-weight:500;margin:0 0 4px;">
     {{ T.portal_welcome }}, {{ current_user.name }}! 👋
@@ -13,34 +15,75 @@
   </p>
 </div>
 
-{% if accessible_modules %}
+<!-- Module grid — shows ALL modules; locked ones invite a request -->
 <div class="row g-4">
-  {% for mod in accessible_modules %}
+  {% for card in all_cards %}
   <div class="col-12 col-sm-6 col-xl-3">
-    <a href="{{ mod.url }}" class="module-card" style="--mod-color:{{ mod.color }};">
+
+    {# ── OPEN module ── #}
+    {% if card.state == 'open' %}
+    <a href="{{ card.url }}" class="module-card" style="--mod-color:{{ card.color }};">
       <div class="module-card-icon">
-        <i class="bi {{ mod.icon }}"></i>
+        <i class="bi {{ card.icon }}"></i>
       </div>
       <div class="module-card-body">
-        <div class="module-card-name">{{ T['mod_' + mod.slug + '_name'] if ('mod_' + mod.slug + '_name') in T else mod.name }}</div>
-        <div class="module-card-desc">{{ T['mod_' + mod.slug + '_desc'] if ('mod_' + mod.slug + '_desc') in T else mod.desc }}</div>
+        <div class="module-card-name">{{ T['mod_' + card.slug + '_name'] if ('mod_' + card.slug + '_name') in T else card.name }}</div>
+        <div class="module-card-desc">{{ T['mod_' + card.slug + '_desc'] if ('mod_' + card.slug + '_desc') in T else card.desc }}</div>
       </div>
       <div class="module-card-arrow">
         <i class="bi bi-arrow-right-circle-fill"></i>
       </div>
     </a>
+
+    {# ── PENDING request ── #}
+    {% elif card.state == 'pending' %}
+    <div class="module-card module-card--locked" style="--mod-color:{{ card.color }};cursor:default;">
+      <div class="module-card-icon" style="opacity:.5;">
+        <i class="bi {{ card.icon }}"></i>
+      </div>
+      <div class="module-card-body">
+        <div class="module-card-name">{{ T['mod_' + card.slug + '_name'] if ('mod_' + card.slug + '_name') in T else card.name }}</div>
+        <div class="module-card-desc">{{ T['mod_' + card.slug + '_desc'] if ('mod_' + card.slug + '_desc') in T else card.desc }}</div>
+        <div class="mt-2">
+          <span class="badge" style="background:#FFA000;color:#fff;font-size:11px;padding:4px 9px;border-radius:20px;">
+            <i class="bi bi-clock me-1"></i>Request pending review
+          </span>
+        </div>
+      </div>
+      <div style="padding-right:14px;opacity:.3;">
+        <i class="bi bi-lock-fill" style="font-size:1.3rem;color:var(--rts-gray);"></i>
+      </div>
+    </div>
+
+    {# ── LOCKED — show Request Access button ── #}
+    {% else %}
+    <div class="module-card module-card--locked" style="--mod-color:{{ card.color }};">
+      <div class="module-card-icon" style="opacity:.45;">
+        <i class="bi {{ card.icon }}"></i>
+      </div>
+      <div class="module-card-body">
+        <div class="module-card-name">{{ T['mod_' + card.slug + '_name'] if ('mod_' + card.slug + '_name') in T else card.name }}</div>
+        <div class="module-card-desc">{{ T['mod_' + card.slug + '_desc'] if ('mod_' + card.slug + '_desc') in T else card.desc }}</div>
+        <div class="mt-2">
+          <button class="btn btn-sm btn-request-access"
+                  data-slug="{{ card.slug }}"
+                  data-name="{{ T['mod_' + card.slug + '_name'] if ('mod_' + card.slug + '_name') in T else card.name }}"
+                  data-bs-toggle="modal" data-bs-target="#requestModal">
+            <i class="bi bi-send me-1"></i>Request Access
+          </button>
+        </div>
+      </div>
+      <div style="padding-right:14px;opacity:.25;">
+        <i class="bi bi-lock-fill" style="font-size:1.3rem;color:var(--rts-gray);"></i>
+      </div>
+    </div>
+    {% endif %}
+
   </div>
   {% endfor %}
 </div>
 
-{% else %}
-<div class="empty-state" style="padding:80px 24px;">
-  <i class="bi bi-lock" style="font-size:3.5rem;opacity:.2;display:block;margin-bottom:14px;color:var(--rts-navy);"></i>
-  <p style="font-size:15px;color:var(--rts-gray);margin-bottom:6px;font-weight:600;">{{ T.portal_no_modules }}</p>
-  <p style="font-size:13px;color:var(--rts-gray);">{{ T.portal_no_modules_sub }}</p>
-</div>
-{% endif %}
-
+<!-- Admin quick links -->
 {% if current_user.role == 'admin' %}
 <div class="mt-5 pt-4" style="border-top:1px solid var(--rts-border);">
   <p style="font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--rts-gray);margin-bottom:12px;font-weight:700;">
@@ -53,10 +96,79 @@
     <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-people me-1"></i>{{ T.portal_users }}
     </a>
+    <a href="{{ url_for('admin.access_requests') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-key me-1"></i>Access Requests
+    </a>
+    <a href="{{ url_for('admin.departments') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-building me-1"></i>Departments
+    </a>
     <a href="{{ url_for('admin.logs') }}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-journal-text me-1"></i>{{ T.nav_logs }}
     </a>
   </div>
 </div>
 {% endif %}
+
+
+<!-- ── Request Access Modal ─────────────────────────────────────────────── -->
+<div class="modal fade" id="requestModal" tabindex="-1" aria-labelledby="requestModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--rts-navy);color:#fff;">
+        <h5 class="modal-title" id="requestModalLabel" style="font-family:'Oswald',sans-serif;">
+          <i class="bi bi-key me-2"></i>Request Module Access
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="requestForm" action="">
+        <div class="modal-body">
+          <p class="text-muted" style="font-size:13px;">
+            You're requesting access to <strong id="requestModuleName"></strong>.
+            IT will review your request and notify you by email once a decision is made.
+          </p>
+
+          {% if departments %}
+          <div class="mb-3">
+            <label class="form-label form-label-sm fw-semibold">Your Department</label>
+            <select name="department_id" class="form-select form-select-sm">
+              <option value="">— Select department —</option>
+              {% for d in departments %}
+              <option value="{{ d.id }}">{{ d.name }} ({{ d.code }})</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">This helps IT scope your inventory access correctly.</div>
+          </div>
+          {% endif %}
+
+          <div class="mb-1">
+            <label class="form-label form-label-sm fw-semibold">Reason / Justification</label>
+            <textarea name="reason" class="form-control form-control-sm" rows="3"
+                      placeholder="Briefly explain why you need access to this module…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4">
+            <i class="bi bi-send me-1"></i>Send Request
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Populate modal with slug & module name when "Request Access" is clicked
+document.querySelectorAll('[data-slug]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const slug = btn.dataset.slug;
+    const name = btn.dataset.name;
+    document.getElementById('requestModuleName').textContent = name;
+    document.getElementById('requestForm').action = `/request-access/${slug}`;
+  });
+});
+</script>
 {% endblock %}

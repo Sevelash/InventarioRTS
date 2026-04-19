@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
-from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action, ALL_MODULES
+from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action, ALL_MODULES, Department, AccessRequest
 from datetime import datetime, date
 from i18n import get_translations, SUPPORTED_LANGS, DEFAULT_LANG
 import os
@@ -46,18 +46,32 @@ with app.app_context():
 
     for col, typ in [('ram','VARCHAR(50)'), ('os_version','VARCHAR(100)'),
                      ('cpu','VARCHAR(150)'), ('supplier','VARCHAR(150)'),
-                     ('last_maintenance','DATE'), ('client_id','INTEGER')]:
+                     ('last_maintenance','DATE'), ('client_id','INTEGER'),
+                     ('department_id', 'INTEGER')]:
         _add_col_if_missing('assets', col, typ)
 
-    # module_access field on users
+    # module_access + department_id on users
     _add_col_if_missing('users', 'module_access', 'TEXT')
+    _add_col_if_missing('users', 'department_id', 'INTEGER')
 
     # task_comments and project_activities — created by db.create_all() above
-    # but add any missing columns if model evolved
     for col, typ in [('icon', 'VARCHAR(50)'), ('color', 'VARCHAR(20)')]:
         _add_col_if_missing('project_activities', col, typ)
 
-    # audit_logs table is created by db.create_all() above
+    # access_requests created by db.create_all() above; ensure columns exist
+    for col, typ in [('department_id', 'INTEGER'), ('reason', 'TEXT'),
+                     ('admin_notes', 'TEXT'), ('reviewed_by', 'VARCHAR(150)'),
+                     ('reviewed_at', 'DATETIME')]:
+        _add_col_if_missing('access_requests', col, typ)
+
+    # Seed IT department if none exist
+    from models import Department
+    if Department.query.count() == 0:
+        it = Department(name='IT', code='IT', color='#089ACF',
+                        manager_name='IT Department')
+        db.session.add(it)
+        db.session.commit()
+        print('✅  Departamento IT creado')
 
     # Crear admin por defecto si no existe ningún usuario
     from models import User
@@ -88,31 +102,103 @@ def parse_date(value):
 
 # ── Portal ────────────────────────────────────────────────────────────────────
 
+_MODULE_URLS = {
+    'inventory':  lambda: url_for('inventory_dashboard'),
+    'projects':   lambda: url_for('projects.dashboard'),
+    'evaluation': lambda: url_for('eval.index'),
+    'repository': lambda: url_for('repo.index'),
+}
+
 @app.route('/')
 @login_required
 def portal():
     user     = session.get('user', {})
     modules  = user.get('modules', [])
     is_admin = user.get('role') == 'admin'
+    uid      = user.get('id')
 
-    # Build list of accessible module cards
-    accessible = []
+    # Pending access-request slugs for this user
+    pending_slugs = set()
+    denied_slugs  = set()
+    if uid:
+        my_reqs = AccessRequest.query.filter_by(user_id=uid).all()
+        for r in my_reqs:
+            if r.status == 'pending':
+                pending_slugs.add(r.module_slug)
+            elif r.status == 'denied':
+                denied_slugs.add(r.module_slug)
+
+    # Build card list — ALL modules, each tagged with access state
+    all_cards = []
     for m in ALL_MODULES:
-        if is_admin or m['slug'] in modules:
-            card = dict(m)
-            # Map slug → URL
-            slug = m['slug']
-            if slug == 'inventory':
-                card['url'] = url_for('inventory_dashboard')
-            elif slug == 'projects':
-                card['url'] = url_for('projects.dashboard')
-            elif slug == 'evaluation':
-                card['url'] = url_for('eval.index')
-            elif slug == 'repository':
-                card['url'] = url_for('repo.index')
-            accessible.append(card)
+        card = dict(m)
+        slug = m['slug']
+        if is_admin or slug in modules:
+            card['state'] = 'open'
+            card['url']   = _MODULE_URLS[slug]()
+        elif slug in pending_slugs:
+            card['state'] = 'pending'
+        else:
+            card['state'] = 'locked'
+        all_cards.append(card)
 
-    return render_template('portal.html', accessible_modules=accessible)
+    return render_template('portal.html', all_cards=all_cards,
+                           departments=Department.query.filter_by(active=True).all())
+
+
+# ── Request Access ────────────────────────────────────────────────────────────
+
+@app.route('/request-access/<slug>', methods=['POST'])
+@login_required
+def request_access(slug):
+    user = session.get('user', {})
+    uid  = user.get('id')
+    # Verify slug is valid
+    valid_slugs = [m['slug'] for m in ALL_MODULES]
+    if slug not in valid_slugs:
+        flash('Invalid module.', 'danger')
+        return redirect(url_for('portal'))
+
+    # Don't allow duplicate pending requests
+    existing = AccessRequest.query.filter_by(
+        user_id=uid, module_slug=slug, status='pending').first()
+    if existing:
+        flash('You already have a pending request for this module.', 'info')
+        return redirect(url_for('portal'))
+
+    dept_id = request.form.get('department_id', type=int) or None
+    reason  = request.form.get('reason', '').strip()
+
+    req = AccessRequest(
+        user_id=uid,
+        user_name=user.get('name'),
+        module_slug=slug,
+        department_id=dept_id,
+        reason=reason,
+        status='pending',
+    )
+    db.session.add(req)
+    log_action('create', 'access_request',
+               entity_name=f'{user.get("name")} → {slug}',
+               details=reason[:200] if reason else None)
+    db.session.commit()
+
+    # Notify admins via Teams
+    import notifications as notif
+    cfg = notif.load_config()
+    if cfg.get('enabled') and cfg.get('teams_enabled'):
+        mod_name = next((m['name'] for m in ALL_MODULES if m['slug'] == slug), slug)
+        notif.send_teams(
+            f'Access Request: {mod_name}',
+            f'{user.get("name")} is requesting access to **{mod_name}**.',
+            facts=[('User', user.get('name')), ('Module', mod_name),
+                   ('Reason', reason[:120] if reason else 'No reason given')],
+            url=notif._url(cfg, '/admin/access-requests'),
+            color='FFA000'
+        )
+
+    flash('Your request has been sent to IT. You\'ll be notified once it\'s reviewed.', 'success')
+    return redirect(url_for('portal'))
 
 
 # ── Inventory Dashboard ───────────────────────────────────────────────────────
@@ -120,11 +206,26 @@ def portal():
 @app.route('/inventory')
 @module_required('inventory')
 def inventory_dashboard():
-    total_assets      = Asset.query.count()
-    available         = Asset.query.filter_by(status='available').count()
-    in_use            = Asset.query.filter_by(status='in_use').count()
-    maintenance       = Asset.query.filter_by(status='maintenance').count()
-    retired           = Asset.query.filter_by(status='retired').count()
+    from models import User as _User
+    sess_user   = session.get('user', {})
+    is_admin    = sess_user.get('role') == 'admin'
+    db_user     = _User.query.get(sess_user.get('id')) if sess_user.get('id') else None
+    # Department-scoped access: non-admin users with a department see only that dept's assets
+    dept_filter = None
+    if not is_admin and db_user and db_user.department_id:
+        dept_filter = db_user.department_id
+
+    def _asset_q():
+        q = Asset.query
+        if dept_filter:
+            q = q.filter_by(department_id=dept_filter)
+        return q
+
+    total_assets      = _asset_q().count()
+    available         = _asset_q().filter_by(status='available').count()
+    in_use            = _asset_q().filter_by(status='in_use').count()
+    maintenance       = _asset_q().filter_by(status='maintenance').count()
+    retired           = _asset_q().filter_by(status='retired').count()
     total_employees   = Employee.query.filter_by(active=True).count()
     total_categories  = Category.query.count()
     foraneo_count     = Asset.query.filter_by(location_type='foraneo').count()
@@ -214,6 +315,8 @@ def inventory_dashboard():
 
     chart_start_year = 2020
 
+    active_dept = Department.query.get(dept_filter) if dept_filter else None
+
     return render_template('inventory/dashboard.html',
                            total_assets=total_assets, available=available,
                            in_use=in_use, maintenance=maintenance, retired=retired,
@@ -225,7 +328,9 @@ def inventory_dashboard():
                            cat_chart_raw=cat_chart_raw,
                            cats_for_chart=cats_for_chart,
                            chart_start_year=chart_start_year,
-                           chart_current_year=date.today().year)
+                           chart_current_year=date.today().year,
+                           active_dept=active_dept,
+                           departments=Department.query.filter_by(active=True).order_by(Department.name).all())
 
 
 # ── Assets ────────────────────────────────────────────────────────────────────

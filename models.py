@@ -23,6 +23,7 @@ class User(db.Model):
     role           = db.Column(db.String(20),  nullable=False, default='viewer')  # admin | viewer
     active         = db.Column(db.Boolean, default=True)
     module_access  = db.Column(db.Text, default='')  # comma-separated slugs, e.g. "inventory,projects"
+    department_id  = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
 
     def set_password(self, password):
@@ -62,6 +63,27 @@ class Category(db.Model):
         return f'<Category {self.name}>'
 
 
+class Department(db.Model):
+    """Internal departments — each can have its own inventory view."""
+    __tablename__ = 'departments'
+    id            = db.Column(db.Integer, primary_key=True)
+    name          = db.Column(db.String(100), nullable=False, unique=True)
+    code          = db.Column(db.String(20),  nullable=False, unique=True)  # e.g. "IT", "MKT", "HR"
+    color         = db.Column(db.String(7),   default='#233C6E')            # hex
+    manager_name  = db.Column(db.String(150))
+    manager_email = db.Column(db.String(150))
+    active        = db.Column(db.Boolean, default=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+    users  = db.relationship('User',  backref='department', lazy=True,
+                             foreign_keys='User.department_id')
+    assets = db.relationship('Asset', backref='department', lazy=True,
+                             foreign_keys='Asset.department_id')
+
+    def __repr__(self):
+        return f'<Department {self.code}>'
+
+
 class Client(db.Model):
     __tablename__ = 'clients'
     id         = db.Column(db.Integer, primary_key=True)
@@ -99,6 +121,7 @@ class Asset(db.Model):
     warranty_expiry = db.Column(db.Date)
     last_maintenance = db.Column(db.Date)
     notes = db.Column(db.Text)
+    department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     assignments = db.relationship('Assignment', backref='asset', lazy=True,
@@ -334,6 +357,29 @@ class ProjectActivity(db.Model):
 
     def __repr__(self):
         return f'<ProjectActivity {self.action} in project={self.project_id}>'
+
+
+class AccessRequest(db.Model):
+    """A user's request to access a module (e.g. inventory for their department)."""
+    __tablename__ = 'access_requests'
+    id              = db.Column(db.Integer, primary_key=True)
+    user_id         = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_name       = db.Column(db.String(150))          # snapshot
+    module_slug     = db.Column(db.String(50), nullable=False)   # 'inventory' | 'projects' | …
+    department_id   = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
+    reason          = db.Column(db.Text)                 # user-supplied justification
+    status          = db.Column(db.String(20), nullable=False, default='pending')
+    # pending | approved | denied
+    admin_notes     = db.Column(db.Text)                 # optional reviewer comment
+    reviewed_by     = db.Column(db.String(150))          # admin name snapshot
+    created_at      = db.Column(db.DateTime, default=datetime.utcnow)
+    reviewed_at     = db.Column(db.DateTime, nullable=True)
+
+    user       = db.relationship('User',       backref='access_requests', lazy=True)
+    department = db.relationship('Department', backref='access_requests', lazy=True)
+
+    def __repr__(self):
+        return f'<AccessRequest {self.user_name} → {self.module_slug} [{self.status}]>'
 
 
 def log_action(action, entity_type, entity_id=None, entity_name=None, details=None):
