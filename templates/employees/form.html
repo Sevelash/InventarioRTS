@@ -13,6 +13,7 @@
 <div class="row justify-content-center">
   <div class="col-lg-7">
     <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="card mb-4">
         <div class="card-header py-3"><i class="bi bi-person me-2"></i>Datos del Empleado</div>
         <div class="card-body">

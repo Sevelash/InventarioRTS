@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}Gantt — {{ project.name }} — RTS{% endblock %}
+{% block page_title %}Gantt Chart{% endblock %}
+
+{% block breadcrumb %}
+  {{ breadcrumbs([
+    ('Projects', url_for('projects.dashboard')),
+    (project.name, url_for('projects.project_detail', id=project.id)),
+    ('Gantt', none)
+  ]) }}
+{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('projects.project_detail', id=project.id) }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-kanban me-1"></i>Board
+  </a>
+  <a href="{{ url_for('projects.project_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-list-ul me-1"></i>All Projects
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Project header ──────────────────────────────────────────────────── -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-3 d-flex align-items-center gap-3 flex-wrap">
+    <div class="d-flex gap-2">
+      <span class="badge"
+            style="background:{% if project.priority=='critical' %}#dc3545{% elif project.priority=='high' %}#fd7e14{% elif project.priority=='medium' %}#0d6efd{% else %}#6c757d{% endif %};">
+        {{ project.priority | upper }}
+      </span>
+      <span class="badge"
+            style="background:{% if project.status=='active' %}#198754{% elif project.status=='completed' %}#0d6efd{% elif project.status=='on_hold' %}#ffc107;color:#000{% elif project.status=='cancelled' %}#6c757d{% else %}#adb5bd;color:#000{% endif %};">
+        {{ project.status | replace('_',' ') | title }}
+      </span>
+    </div>
+
+    <div>
+      <span class="fw-bold" style="font-size:15px;color:var(--rts-navy);">{{ project.name }}</span>
+      {% if project.client %}
+        <span class="text-muted ms-2" style="font-size:12.5px;">
+          <i class="bi bi-building me-1"></i>{{ project.client.name }}
+        </span>
+      {% endif %}
+    </div>
+
+    <div class="ms-auto d-flex gap-3 align-items-center" style="font-size:12.5px;">
+      {% if project.start_date %}
+        <span><i class="bi bi-calendar-event me-1 text-muted"></i>{{ project.start_date.strftime('%b %d, %Y') }}</span>
+        <i class="bi bi-arrow-right text-muted"></i>
+      {% endif %}
+      {% if project.end_date %}
+        <span class="{% if project.is_overdue %}text-danger fw-bold{% endif %}">
+          <i class="bi bi-calendar-x me-1 {% if project.is_overdue %}text-danger{% else %}text-muted{% endif %}"></i>
+          {{ project.end_date.strftime('%b %d, %Y') }}
+          {% if project.is_overdue %}<span class="badge bg-danger ms-1">OVERDUE</span>{% endif %}
+        </span>
+      {% endif %}
+      <div class="d-flex align-items-center gap-2">
+        <div class="progress" style="width:90px;height:7px;border-radius:4px;background:#e9ecef;">
+          <div class="progress-bar" style="width:{{ project.progress }}%;background:var(--rts-blue);border-radius:4px;"></div>
+        </div>
+        <span class="fw-bold text-navy">{{ project.progress }}%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if tasks_data %}
+
+<!-- ── Legend ─────────────────────────────────────────────────────────── -->
+<div class="d-flex gap-3 align-items-center mb-2" style="font-size:12px;color:#6c757d;">
+  <span class="fw-semibold" style="color:var(--rts-navy);">Legend:</span>
+  <span><span style="display:inline-block;width:14px;height:10px;background:linear-gradient(90deg,#089ACF,#0d8fb5);border-radius:3px;margin-right:4px;"></span>In Progress</span>
+  <span><span style="display:inline-block;width:14px;height:10px;background:linear-gradient(90deg,#198754,#157347);border-radius:3px;margin-right:4px;opacity:.85;"></span>Done</span>
+  <span><span style="display:inline-block;width:14px;height:10px;background:linear-gradient(90deg,#dc3545,#b02a37);border-radius:3px;margin-right:4px;"></span>Overdue</span>
+  <span><span style="display:inline-block;width:14px;height:10px;background:linear-gradient(90deg,#0dcaf0,#0bb3d4);border-radius:3px;margin-right:4px;"></span>In Review</span>
+  <span><span style="display:inline-block;width:14px;height:10px;background:linear-gradient(90deg,#adb5bd,#9ba3ab);border-radius:3px;margin-right:4px;"></span>Pending</span>
+  <span class="ms-auto" style="font-size:11px;">
+    <i class="bi bi-info-circle me-1"></i>
+    Timeline: <strong>{{ start.strftime('%b %d, %Y') }}</strong> → <strong>{{ end.strftime('%b %d, %Y') }}</strong>
+    ({{ total_days }} days)
+  </span>
+</div>
+
+<!-- ── Gantt Chart ──────────────────────────────────────────────────────── -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header d-flex align-items-center justify-content-between py-2"
+       style="background:linear-gradient(90deg,#EBF5FB 0%,#fff 100%);">
+    <span style="font-size:13.5px;font-weight:700;color:var(--rts-navy);">
+      <i class="bi bi-bar-chart-steps me-2"></i>Task Timeline
+      <span class="badge bg-light text-dark border ms-2" style="font-size:11px;">
+        {{ tasks_data|length }} task{{ 's' if tasks_data|length != 1 }}
+      </span>
+    </span>
+    <span style="font-size:11.5px;color:#6c757d;">
+      <i class="bi bi-calendar-week me-1"></i>Today: <strong>{{ today.strftime('%b %d, %Y') }}</strong>
+    </span>
+  </div>
+
+  <div class="card-body p-0">
+    <div class="gantt-wrap" id="ganttWrap">
+
+      <!-- ── Header row ─────────────────────────────────────────────────── -->
+      <div class="gantt-header">
+        <div class="gantt-label-col">
+          <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6c757d;">
+            Task
+          </span>
+        </div>
+        <div class="gantt-timeline-col" id="ganttTimeline">
+          <!-- Month markers injected by JS -->
+        </div>
+      </div>
+
+      <!-- ── Today line (absolute, injected by JS) ──────────────────────── -->
+      <div id="todayLine" class="gantt-today-line"></div>
+
+      <!-- ── Task rows ──────────────────────────────────────────────────── -->
+      {% for t in tasks_data %}
+      <div class="gantt-row {% if loop.index is odd %}gantt-row-alt{% endif %}">
+
+        <!-- Label column -->
+        <div class="gantt-label-col">
+          <div class="d-flex align-items-center gap-2">
+            <!-- Status icon -->
+            {% if t.done %}
+              <i class="bi bi-check-circle-fill text-success" style="font-size:.85rem;flex-shrink:0;"></i>
+            {% elif t.overdue %}
+              <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size:.85rem;flex-shrink:0;"></i>
+            {% elif t.status == 'in_progress' %}
+              <i class="bi bi-play-circle-fill" style="color:var(--rts-blue);font-size:.85rem;flex-shrink:0;"></i>
+            {% elif t.status == 'review' %}
+              <i class="bi bi-eye-fill text-info" style="font-size:.85rem;flex-shrink:0;"></i>
+            {% else %}
+              <i class="bi bi-circle text-secondary" style="font-size:.85rem;flex-shrink:0;"></i>
+            {% endif %}
+
+            <div style="min-width:0;">
+              <div class="gantt-task-title {% if t.done %}text-decoration-line-through text-muted{% endif %}">
+                {{ t.title | truncate(26) }}
+              </div>
+              <div class="d-flex gap-1 flex-wrap">
+                <!-- Priority badge -->
+                {% if t.priority == 'critical' %}
+                  <span class="badge" style="font-size:9px;background:#dc3545;">CRIT</span>
+                {% elif t.priority == 'high' %}
+                  <span class="badge" style="font-size:9px;background:#fd7e14;">HIGH</span>
+                {% elif t.priority == 'medium' %}
+                  <span class="badge" style="font-size:9px;background:#0d6efd;">MED</span>
+                {% else %}
+                  <span class="badge bg-secondary" style="font-size:9px;">LOW</span>
+                {% endif %}
+                {% if t.assigned %}
+                  <span class="gantt-task-assignee">
+                    <i class="bi bi-person" style="font-size:9px;"></i> {{ t.assigned | truncate(12) }}
+                  </span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bar column -->
+        <div class="gantt-timeline-col">
+          <div class="gantt-bar-track">
+            <div class="gantt-bar
+              {% if t.done %}gantt-bar-done
+              {% elif t.overdue %}gantt-bar-overdue
+              {% elif t.status == 'in_progress' %}gantt-bar-active
+              {% elif t.status == 'review' %}gantt-bar-review
+              {% else %}gantt-bar-pending{% endif %}"
+              style="margin-left:{{ t.s_pct }}%;width:{{ t.w_pct }}%;"
+              data-title="{{ t.title }}{% if t.due_date %} · Due: {{ t.due_date.strftime('%b %d, %Y') }}{% endif %}{% if t.overdue %} · ⚠ OVERDUE{% endif %}">
+              {% if t.w_pct > 7 %}
+              <span class="gantt-bar-label">
+                {% if t.due_date %}{{ t.due_date.strftime('%b %d') }}{% endif %}
+              </span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+      </div>
+      {% endfor %}
+
+    </div><!-- /gantt-wrap -->
+  </div>
+</div>
+
+{% else %}
+<!-- ── Empty state ────────────────────────────────────────────────────── -->
+<div class="card border-0 shadow-sm">
+  <div class="card-body">
+    <div class="empty-state">
+      <i class="bi bi-bar-chart-steps" style="font-size:2.5rem;color:#d1e7ff;margin-bottom:.5rem;display:block;"></i>
+      <p class="mb-1 fw-semibold">No hay tareas para mostrar en el Gantt.</p>
+      <p class="text-muted" style="font-size:12.5px;">
+        Agrega tareas con fechas de entrega para visualizarlas en la línea de tiempo.
+      </p>
+      <a href="{{ url_for('projects.project_detail', id=project.id) }}" class="btn btn-outline-primary btn-sm mt-2">
+        <i class="bi bi-kanban me-1"></i>Ir al tablero
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+{% if tasks_data %}
+<script>
+(function () {
+  // ── Date helpers ──────────────────────────────────────────────────────
+  const startDate  = new Date('{{ start }}');
+  const endDate    = new Date('{{ end }}');
+  const totalDays  = Math.max(1, (endDate - startDate) / 86400000);
+  const todayDate  = new Date('{{ today }}');
+
+  function pct(d) {
+    return Math.max(0, Math.min(100, (d - startDate) / 86400000 / totalDays * 100));
+  }
+
+  // ── Month markers ─────────────────────────────────────────────────────
+  const timeline = document.getElementById('ganttTimeline');
+  if (timeline) {
+    let cur = new Date(startDate);
+    cur.setDate(1);
+    while (cur <= endDate) {
+      const p = pct(cur);
+      const mk = document.createElement('div');
+      mk.className = 'gantt-month-mark';
+      mk.style.left = p + '%';
+      mk.textContent = cur.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      timeline.appendChild(mk);
+      cur.setMonth(cur.getMonth() + 1);
+    }
+
+    // Weekly tick marks (subtle)
+    let wk = new Date(startDate);
+    while (wk <= endDate) {
+      const p = pct(wk);
+      const tick = document.createElement('div');
+      tick.className = 'gantt-week-tick';
+      tick.style.left = p + '%';
+      timeline.appendChild(tick);
+      wk.setDate(wk.getDate() + 7);
+    }
+  }
+
+  // ── Today line ────────────────────────────────────────────────────────
+  const todayLine = document.getElementById('todayLine');
+  const todayPct  = pct(todayDate);
+  if (todayLine && todayPct >= 0 && todayPct <= 100) {
+    const wrap = document.getElementById('ganttWrap');
+    if (wrap) {
+      const labelWidth = 220; // px — matches CSS
+      todayLine.style.left    = `calc(${labelWidth}px + ${todayPct}% * (100% - ${labelWidth}px) / 100)`;
+      todayLine.style.display = 'block';
+    }
+  }
+
+  // ── Tooltip on hover ──────────────────────────────────────────────────
+  let tip = null;
+
+  document.querySelectorAll('.gantt-bar[data-title]').forEach(bar => {
+    bar.addEventListener('mouseenter', function (e) {
+      if (tip) tip.remove();
+      tip = document.createElement('div');
+      tip.className = 'gantt-tooltip';
+      tip.textContent = this.dataset.title;
+      document.body.appendChild(tip);
+      const rect = this.getBoundingClientRect();
+      tip.style.top  = (rect.top + window.scrollY - tip.offsetHeight - 8) + 'px';
+      tip.style.left = (rect.left + rect.width / 2 - tip.offsetWidth / 2) + 'px';
+    });
+    bar.addEventListener('mouseleave', function () {
+      if (tip) { tip.remove(); tip = null; }
+    });
+  });
+
+  // ── Keyboard: press Escape to remove tooltip ──────────────────────────
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && tip) { tip.remove(); tip = null; }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

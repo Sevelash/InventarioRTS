@@ -13,6 +13,7 @@
 <div class="row justify-content-center">
   <div class="col-lg-8">
     <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <!-- Activo & Carrier -->
       <div class="card mb-3">

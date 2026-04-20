@@ -216,6 +216,7 @@
         <tr class="{% if t.status == 'done' %}text-muted{% endif %}">
           <td>
             <form method="post" action="{{ url_for('projects.task_status', id=project.id, task_id=t.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="status" value="{{ 'pending' if t.status == 'done' else 'done' }}">
               <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"
                       style="font-size:18px;color:{{ '#28A745' if t.status == 'done' else '#CCC' }};">
@@ -412,6 +413,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form method="post" action="{{ url_for('projects.task_new', id=project.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Title <span class="text-danger">*</span></label>
@@ -527,6 +529,7 @@
           <!-- Right: edit panel -->
           <div class="col-md-4 p-4 bg-light">
             <form method="post" action="{{ url_for('projects.task_edit', id=project.id, task_id=t.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <div class="mb-3">
                 <label class="form-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--rts-gray);">Title</label>
                 <input type="text" name="title" class="form-control form-control-sm" value="{{ t.title }}" required>
@@ -594,6 +597,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form method="post" action="{{ url_for('projects.member_add', id=project.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">User</label>
@@ -635,6 +639,7 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <form method="post" action="{{ url_for('projects.project_delete', id=project.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete permanently</button>
         </form>
       </div>

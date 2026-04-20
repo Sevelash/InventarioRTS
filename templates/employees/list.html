@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import pagination_bar, breadcrumbs %}
 
 {% block title %}Empleados - RTS Asset Management{% endblock %}
 {% block page_title %}Empleados{% endblock %}
@@ -11,6 +12,10 @@
   <a href="{{ url_for('employee_new') }}" class="btn btn-rts btn-sm">
     <i class="bi bi-person-plus me-1"></i>Nuevo Empleado
   </a>
+{% endblock %}
+
+{% block breadcrumb %}
+  {{ breadcrumbs([('Inventory', url_for('inventory_dashboard')), ('Employees', none)]) }}
 {% endblock %}
 
 {% block content %}
@@ -39,7 +44,7 @@
 
 <div class="card">
   <div class="card-header d-flex align-items-center justify-content-between py-3">
-    <span><i class="bi bi-people me-2"></i>{{ employees|length }} empleado(s)</span>
+    <span><i class="bi bi-people me-2"></i>{{ pagination.total if pagination else employees|length }} empleado(s)</span>
   </div>
   <div class="card-body p-0">
     {% if employees %}
@@ -86,6 +91,7 @@
               </a>
               <form action="{{ url_for('employee_delete', id=emp.id) }}" method="post" class="d-inline"
                     onsubmit="return confirm('¿Eliminar empleado {{ emp.name }}?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-outline-danger py-0 px-2"><i class="bi bi-trash"></i></button>
               </form>
             </td>
@@ -103,6 +109,7 @@
       </div>
     </div>
     {% endif %}
+    {{ pagination_bar(pagination, 'employees_list', {'q': q, 'inactive': '1' if show_inactive else ''}) }}
   </div>
 </div>
 {% endblock %}

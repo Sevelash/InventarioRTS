@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import pagination_bar, breadcrumbs %}
 
 {% block title %}Envíos DHL - RTS Asset Management{% endblock %}
 {% block page_title %}Envíos & Trazabilidad{% endblock %}
@@ -11,6 +12,10 @@
   <a href="{{ url_for('shipment_new') }}" class="btn btn-navy btn-sm">
     <i class="bi bi-plus-lg me-1"></i>Nuevo Envío
   </a>
+{% endblock %}
+
+{% block breadcrumb %}
+  {{ breadcrumbs([('Inventory', url_for('inventory_dashboard')), ('Shipments', none)]) }}
 {% endblock %}
 
 {% block content %}
@@ -37,7 +42,7 @@
 <!-- Tabla -->
 <div class="card">
   <div class="card-header d-flex align-items-center justify-content-between">
-    <span><i class="bi bi-truck me-2"></i>{{ shipments|length }} envío(s)</span>
+    <span><i class="bi bi-truck me-2"></i>{{ pagination.total if pagination else shipments|length }} envío(s)</span>
   </div>
   <div class="card-body p-0">
     {% if shipments %}
@@ -102,6 +107,7 @@
               </a>
               <form action="{{ url_for('shipment_delete', id=s.id) }}" method="post" class="d-inline"
                     onsubmit="return confirm('¿Eliminar este envío?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-outline-danger py-0 px-2"><i class="bi bi-trash"></i></button>
               </form>
             </td>
@@ -117,6 +123,7 @@
       <a href="{{ url_for('shipment_new') }}" class="btn btn-navy btn-sm">Registrar primer envío</a>
     </div>
     {% endif %}
+    {{ pagination_bar(pagination, 'shipments_list', {'status': status_filter}) }}
   </div>
 </div>
 {% endblock %}

@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}My Tasks — RTS{% endblock %}
+{% block page_title %}My Tasks{% endblock %}
+
+{% block breadcrumb %}
+  {{ breadcrumbs([('Projects', url_for('projects.dashboard')), ('My Tasks', none)]) }}
+{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('projects.project_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-kanban me-1"></i>All Projects
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Summary chips ─────────────────────────────────────────── -->
+<div class="d-flex gap-2 flex-wrap mb-3">
+  <a href="{{ url_for('projects.my_tasks') }}"
+     class="btn btn-sm {% if not status_filter %}btn-rts{% else %}btn-outline-secondary{% endif %}">
+    <i class="bi bi-list-task me-1"></i>All Active
+    <span class="badge bg-white text-dark ms-1">{{ tasks|length }}</span>
+  </a>
+  {% if overdue_count %}
+  <a href="{{ url_for('projects.my_tasks', status='overdue') }}"
+     class="btn btn-sm {% if status_filter == 'overdue' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+    <i class="bi bi-exclamation-triangle me-1"></i>Overdue
+    <span class="badge {% if status_filter == 'overdue' %}bg-white text-danger{% else %}bg-danger{% endif %} ms-1">{{ overdue_count }}</span>
+  </a>
+  {% endif %}
+  {% if due_today %}
+  <a href="{{ url_for('projects.my_tasks', status='due_today') }}"
+     class="btn btn-sm {% if status_filter == 'due_today' %}btn-warning text-dark{% else %}btn-outline-warning{% endif %}">
+    <i class="bi bi-calendar-event me-1"></i>Due Today
+    <span class="badge {% if status_filter == 'due_today' %}bg-dark{% else %}bg-warning text-dark{% endif %} ms-1">{{ due_today }}</span>
+  </a>
+  {% endif %}
+  <a href="{{ url_for('projects.my_tasks', status='todo') }}"
+     class="btn btn-sm {% if status_filter == 'todo' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Todo</a>
+  <a href="{{ url_for('projects.my_tasks', status='in_progress') }}"
+     class="btn btn-sm {% if status_filter == 'in_progress' %}btn-primary{% else %}btn-outline-primary{% endif %}">In Progress</a>
+  <a href="{{ url_for('projects.my_tasks', status='review') }}"
+     class="btn btn-sm {% if status_filter == 'review' %}btn-info text-white{% else %}btn-outline-info{% endif %}">In Review</a>
+  <a href="{{ url_for('projects.my_tasks', status='done') }}"
+     class="btn btn-sm {% if status_filter == 'done' %}btn-success{% else %}btn-outline-success{% endif %}">Done</a>
+</div>
+
+{% if tasks %}
+
+  <!-- ── Grouped by project ─────────────────────────────────── -->
+  {% for item in by_project %}
+  {% set project = item.project %}
+  {% set project_tasks = item.tasks %}
+  <div class="card mb-3 border-0 shadow-sm">
+    <div class="card-header d-flex align-items-center gap-2 py-2"
+         style="background:linear-gradient(90deg,#EBF5FB 0%,#fff 100%);border-bottom:2px solid #E2EDF5;">
+      <i class="bi bi-kanban" style="color:var(--rts-blue);font-size:1rem;"></i>
+      <a href="{{ url_for('projects.project_detail', id=project.id) }}"
+         class="fw-bold text-decoration-none"
+         style="color:var(--rts-navy);font-size:14px;">
+        {{ project.name }}
+      </a>
+      {% if project.client %}
+      <span class="badge bg-light text-dark border ms-1" style="font-size:10.5px;font-weight:500;">
+        <i class="bi bi-building me-1"></i>{{ project.client.name }}
+      </span>
+      {% endif %}
+      <span class="badge ms-auto" style="background:var(--rts-blue);font-size:11px;">
+        {{ project_tasks|length }} task{{ 's' if project_tasks|length != 1 }}
+      </span>
+    </div>
+
+    <div class="card-body p-0">
+      <div class="row g-0">
+        {% for task in project_tasks %}
+        {% set is_overdue = task.due_date and task.due_date < today and task.status not in ['done','cancelled'] %}
+        {% set is_due_today = task.due_date and task.due_date == today and task.status not in ['done','cancelled'] %}
+        <div class="col-12">
+          <div class="my-task-card {% if is_overdue %}border-start border-danger border-3{% elif is_due_today %}border-start border-warning border-3{% endif %}"
+               style="{% if not loop.last %}border-bottom:1px solid #f0f4f8;{% endif %}">
+
+            <!-- Priority dot + status badge -->
+            <div class="d-flex align-items-start gap-3">
+              <div class="flex-shrink-0 mt-1">
+                {% if task.priority == 'critical' %}
+                  <span class="badge bg-danger" style="font-size:10px;">CRITICAL</span>
+                {% elif task.priority == 'high' %}
+                  <span class="badge bg-warning text-dark" style="font-size:10px;">HIGH</span>
+                {% elif task.priority == 'medium' %}
+                  <span class="badge bg-primary" style="font-size:10px;">MED</span>
+                {% else %}
+                  <span class="badge bg-secondary" style="font-size:10px;">LOW</span>
+                {% endif %}
+              </div>
+
+              <!-- Task info -->
+              <div class="flex-grow-1">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <span class="fw-semibold" style="font-size:13.5px;color:var(--rts-navy);">
+                    {{ task.title }}
+                  </span>
+
+                  <!-- Status -->
+                  {% if task.status == 'todo' %}
+                    <span class="badge bg-secondary" style="font-size:10.5px;">To Do</span>
+                  {% elif task.status == 'in_progress' %}
+                    <span class="badge bg-primary" style="font-size:10.5px;">In Progress</span>
+                  {% elif task.status == 'review' %}
+                    <span class="badge bg-info text-white" style="font-size:10.5px;">In Review</span>
+                  {% elif task.status == 'done' %}
+                    <span class="badge bg-success" style="font-size:10.5px;">Done</span>
+                  {% elif task.status == 'cancelled' %}
+                    <span class="badge bg-secondary" style="font-size:10.5px;text-decoration:line-through;">Cancelled</span>
+                  {% endif %}
+
+                  <!-- Overdue / due today alerts -->
+                  {% if is_overdue %}
+                    <span class="badge bg-danger" style="font-size:10px;">
+                      <i class="bi bi-exclamation-triangle me-1"></i>Overdue · {{ task.due_date.strftime('%b %d') }}
+                    </span>
+                  {% elif is_due_today %}
+                    <span class="badge bg-warning text-dark" style="font-size:10px;">
+                      <i class="bi bi-clock me-1"></i>Due Today
+                    </span>
+                  {% elif task.due_date %}
+                    <span class="text-muted" style="font-size:11.5px;">
+                      <i class="bi bi-calendar3 me-1"></i>{{ task.due_date.strftime('%b %d, %Y') }}
+                    </span>
+                  {% endif %}
+                </div>
+
+                {% if task.description %}
+                <p class="text-muted mb-0 mt-1" style="font-size:12px;line-height:1.5;">
+                  {{ task.description | truncate(120) }}
+                </p>
+                {% endif %}
+              </div>
+
+              <!-- Quick actions -->
+              <div class="flex-shrink-0 d-flex gap-1 align-items-start">
+                <a href="{{ url_for('projects.project_detail', id=project.id) }}#task-{{ task.id }}"
+                   class="btn btn-sm btn-outline-primary py-0 px-2" title="View in project">
+                  <i class="bi bi-arrow-up-right"></i>
+                </a>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+{% else %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body">
+    <div class="empty-state">
+      <i class="bi bi-check2-all d-block" style="font-size:2.5rem;color:#d1fae5;margin-bottom:.5rem;"></i>
+      <p class="mb-1 fw-semibold">
+        {% if status_filter %}
+          No tasks with status "{{ status_filter }}" assigned to you.
+        {% else %}
+          You're all caught up — no active tasks!
+        {% endif %}
+      </p>
+      <a href="{{ url_for('projects.project_list') }}" class="btn btn-outline-secondary btn-sm mt-2">
+        <i class="bi bi-kanban me-1"></i>View All Projects
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

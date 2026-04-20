@@ -121,6 +121,7 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <form method="post" id="requestForm" action="">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="modal-body">
           <p class="text-muted" style="font-size:13px;">
             You're requesting access to <strong id="requestModuleName"></strong>.
@@ -159,7 +160,7 @@
 
 {% endblock %}
 
-{% block extra_js %}
+{% block scripts %}
 <script>
 // Populate modal with slug & module name when "Request Access" is clicked
 document.querySelectorAll('[data-slug]').forEach(btn => {

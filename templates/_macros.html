@@ -1,0 +1,54 @@
+{% macro pagination_bar(pagination, endpoint, extra_args={}) %}
+{% if pagination and pagination.pages > 1 %}
+<div class="rts-pagination">
+  <span class="page-info">
+    Showing <strong>{{ ((pagination.page-1)*pagination.per_page)+1 }}–{{ [pagination.page*pagination.per_page, pagination.total]|min }}</strong>
+    of <strong>{{ pagination.total }}</strong> records
+  </span>
+  <nav>
+    <ul class="pagination pagination-sm mb-0 gap-1">
+      <li class="page-item {{ 'disabled' if not pagination.has_prev }}">
+        <a class="page-link" href="{{ url_for(endpoint, page=pagination.prev_num, **extra_args) if pagination.has_prev else '#' }}">
+          <i class="bi bi-chevron-left"></i>
+        </a>
+      </li>
+      {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+        {% if p %}
+          <li class="page-item {{ 'active' if p == pagination.page }}">
+            <a class="page-link" href="{{ url_for(endpoint, page=p, **extra_args) }}">{{ p }}</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">…</span></li>
+        {% endif %}
+      {% endfor %}
+      <li class="page-item {{ 'disabled' if not pagination.has_next }}">
+        <a class="page-link" href="{{ url_for(endpoint, page=pagination.next_num, **extra_args) if pagination.has_next else '#' }}">
+          <i class="bi bi-chevron-right"></i>
+        </a>
+      </li>
+    </ul>
+  </nav>
+</div>
+{% elif pagination %}
+<div class="rts-pagination">
+  <span class="page-info"><strong>{{ pagination.total }}</strong> record{{ 's' if pagination.total != 1 }}</span>
+</div>
+{% endif %}
+{% endmacro %}
+
+
+{% macro breadcrumbs(items) %}
+{# items = list of (label, url_or_None) #}
+<div class="rts-breadcrumb">
+  <i class="bi bi-house-door me-1"></i>
+  <a href="/">Portal</a>
+  {% for label, url in items %}
+  <span class="bc-sep">/</span>
+  {% if url and not loop.last %}
+    <a href="{{ url }}">{{ label }}</a>
+  {% else %}
+    <span class="bc-current">{{ label }}</span>
+  {% endif %}
+  {% endfor %}
+</div>
+{% endmacro %}

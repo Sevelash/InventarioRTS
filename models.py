@@ -1,6 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timedelta
 
 db = SQLAlchemy()
 
@@ -24,7 +24,12 @@ class User(db.Model):
     active         = db.Column(db.Boolean, default=True)
     module_access  = db.Column(db.Text, default='')  # comma-separated slugs, e.g. "inventory,projects"
     department_id  = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
-    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at           = db.Column(db.DateTime, default=datetime.utcnow)
+    totp_secret          = db.Column(db.String(32),  nullable=True)   # base32 TOTP secret
+    mfa_enabled          = db.Column(db.Boolean, default=False)
+    force_password_change = db.Column(db.Boolean, default=False)      # first-login flag
+    failed_logins        = db.Column(db.Integer, default=0)
+    locked_until         = db.Column(db.DateTime, nullable=True)
 
     def set_password(self, password):
         self.pwd_hash = generate_password_hash(password)
@@ -47,6 +52,21 @@ class User(db.Model):
     def set_modules(self, slugs):
         """Set module access from a list of slugs."""
         self.module_access = ','.join(slugs)
+
+    def is_locked(self):
+        if self.locked_until and datetime.utcnow() < self.locked_until:
+            return True
+        return False
+
+    def record_failed_login(self):
+        self.failed_logins = (self.failed_logins or 0) + 1
+        if self.failed_logins >= 5:
+            self.locked_until = datetime.utcnow() + timedelta(minutes=15)
+        db.session.commit()
+
+    def reset_failed_logins(self):
+        self.failed_logins = 0
+        self.locked_until = None
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -218,7 +238,7 @@ class AuditLog(db.Model):
     entity_name = db.Column(db.String(250), nullable=True)
     details     = db.Column(db.Text, nullable=True)   # descripción legible del cambio
     ip_address  = db.Column(db.String(50), nullable=True)
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     user = db.relationship('User', backref='audit_logs', lazy=True,
                            foreign_keys=[user_id])
@@ -386,8 +406,10 @@ def log_action(action, entity_type, entity_id=None, entity_name=None, details=No
     """Registra una acción en el audit log. El caller debe hacer commit."""
     try:
         from flask import session as _sess, request as _req
-        u  = _sess.get('user', {})
-        ip = _req.remote_addr
+        u = _sess.get('user', {})
+        # X-Forwarded-For support for reverse proxies
+        forwarded = _req.headers.get('X-Forwarded-For', '')
+        ip = forwarded.split(',')[0].strip() if forwarded else _req.remote_addr
     except RuntimeError:
         u, ip = {}, None
     entry = AuditLog(

@@ -146,6 +146,10 @@
                class="btn btn-sm btn-outline-secondary" title="Ver detalle">
               <i class="bi bi-eye"></i>
             </a>
+            <a href="{{ url_for('projects.project_gantt', id=p.id) }}"
+               class="btn btn-sm btn-outline-secondary ms-1" title="Gantt">
+              <i class="bi bi-bar-chart-steps"></i>
+            </a>
             <a href="{{ url_for('projects.project_edit', id=p.id) }}"
                class="btn btn-sm btn-outline-secondary ms-1" title="Editar">
               <i class="bi bi-pencil"></i>

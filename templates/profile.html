@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}My Profile — RTS{% endblock %}
+{% block page_title %}My Profile{% endblock %}
+
+{% block breadcrumb %}
+  {{ breadcrumbs([('My Profile', none)]) }}
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center g-4">
+
+  <!-- Profile card -->
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+
+        <!-- Avatar -->
+        <div class="text-center mb-4">
+          <div style="width:72px;height:72px;border-radius:50%;background:var(--rts-navy);
+                      color:#fff;font-size:26px;font-weight:700;
+                      display:flex;align-items:center;justify-content:center;
+                      margin:0 auto 12px;letter-spacing:-.02em;">
+            {{ user.name[:2].upper() }}
+          </div>
+          <div style="font-family:'Oswald',sans-serif;font-size:20px;color:var(--rts-navy);font-weight:600;">
+            {{ user.name }}
+          </div>
+          <div style="font-size:12px;color:var(--rts-gray);">
+            @{{ user.username }}
+            <span class="badge ms-1 {{ 'bg-danger' if user.role == 'admin' else 'bg-secondary' }}" style="font-size:10px;">
+              {{ user.role }}
+            </span>
+          </div>
+          {% if user.department %}
+          <div class="mt-1">
+            <span class="badge" style="background:{{ user.department.color }};color:#fff;font-size:11px;">
+              <i class="bi bi-building me-1"></i>{{ user.department.name }}
+            </span>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Edit form -->
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Full Name</label>
+            <input type="text" name="name" class="form-control"
+                   value="{{ user.name }}" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Email</label>
+            <input type="email" name="email" class="form-control"
+                   value="{{ user.email or '' }}"
+                   placeholder="your@email.com">
+            <div class="form-text">Used for notifications. Optional.</div>
+          </div>
+
+          <hr class="my-3">
+          <p class="fw-semibold mb-2" style="font-size:13px;">Change Password</p>
+
+          <div class="mb-3">
+            <label class="form-label form-label-sm">New Password</label>
+            <input type="password" name="password" class="form-control form-control-sm"
+                   id="pwd1" placeholder="Leave blank to keep current"
+                   autocomplete="new-password">
+          </div>
+          <div class="mb-3">
+            <label class="form-label form-label-sm">Confirm New Password</label>
+            <input type="password" name="password2" class="form-control form-control-sm"
+                   id="pwd2" placeholder="Repeat new password"
+                   autocomplete="new-password">
+            <div id="pwdMatch" class="form-text"></div>
+          </div>
+
+          <div class="d-flex gap-2 justify-content-end mt-4">
+            <a href="{{ url_for('portal') }}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary px-4" id="saveBtn">
+              <i class="bi bi-floppy me-1"></i>Save Changes
+            </button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Info cards -->
+  <div class="col-lg-4">
+
+    <!-- Module access -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header fw-bold" style="font-size:13px;">
+        <i class="bi bi-grid me-2 text-primary"></i>Module Access
+      </div>
+      <div class="card-body p-3">
+        {% set mods = user.get_modules() %}
+        {% if mods %}
+        <div class="d-flex flex-wrap gap-2">
+          {% for m in ALL_MODULES %}
+          {% if m.slug in mods %}
+          <span class="badge py-2 px-3" style="background:{{ m.color }};color:#fff;font-size:11.5px;border-radius:8px;">
+            <i class="bi {{ m.icon }} me-1"></i>{{ m.name }}
+          </span>
+          {% endif %}
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted mb-0" style="font-size:13px;">No module access assigned yet. Contact IT.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Account info -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header fw-bold" style="font-size:13px;">
+        <i class="bi bi-info-circle me-2 text-muted"></i>Account Info
+      </div>
+      <div class="card-body p-3">
+        <dl class="row mb-0" style="font-size:13px;">
+          <dt class="col-5 text-muted">Username</dt>
+          <dd class="col-7">{{ user.username }}</dd>
+          <dt class="col-5 text-muted">Role</dt>
+          <dd class="col-7 text-capitalize">{{ user.role }}</dd>
+          <dt class="col-5 text-muted">Member since</dt>
+          <dd class="col-7">{{ user.created_at.strftime('%B %Y') if user.created_at else '—' }}</dd>
+          <dt class="col-5 text-muted">Status</dt>
+          <dd class="col-7">
+            <span class="badge {{ 'bg-success' if user.active else 'bg-secondary' }}">
+              {{ 'Active' if user.active else 'Inactive' }}
+            </span>
+          </dd>
+        </dl>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const p1 = document.getElementById('pwd1');
+const p2 = document.getElementById('pwd2');
+const hint = document.getElementById('pwdMatch');
+
+function checkMatch() {
+  if (!p1.value && !p2.value) { hint.textContent = ''; return; }
+  if (p2.value && p1.value !== p2.value) {
+    hint.textContent = 'Passwords do not match.';
+    hint.style.color = '#DC3545';
+  } else if (p2.value) {
+    hint.textContent = '✓ Passwords match.';
+    hint.style.color = '#28A745';
+  } else { hint.textContent = ''; }
+}
+p1.addEventListener('input', checkMatch);
+p2.addEventListener('input', checkMatch);
+</script>
+{% endblock %}

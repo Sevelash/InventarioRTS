@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}Import Assets — RTS{% endblock %}
+{% block page_title %}Import Assets from Excel{% endblock %}
+
+{% block breadcrumb %}
+  {{ breadcrumbs([('Inventory', url_for('inventory_dashboard')), ('Assets', url_for('assets_list')), ('Import', none)]) }}
+{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('assets_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back to Assets
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center g-4">
+
+  <!-- Upload card -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header fw-bold" style="font-size:14px;">
+        <i class="bi bi-file-earmark-arrow-up me-2 text-success"></i>Upload Excel File
+      </div>
+      <div class="card-body p-4">
+        <form method="post" enctype="multipart/form-data" id="importForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Excel File (.xlsx)</label>
+            <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required id="fileInput">
+            <div class="form-text">
+              Max 5 MB. Existing assets (matched by Asset Tag) will be <strong>updated</strong>; new tags will be <strong>created</strong>.
+            </div>
+          </div>
+
+          <!-- Preview area -->
+          <div id="filePreview" class="d-none mb-3">
+            <div class="d-flex align-items-center gap-2 p-3 rounded" style="background:#F0FFF4;border:1px solid #d1fae5;">
+              <i class="bi bi-file-earmark-excel text-success" style="font-size:1.6rem;"></i>
+              <div>
+                <div class="fw-semibold" id="fileName" style="font-size:13px;"></div>
+                <div class="text-muted" id="fileSize" style="font-size:11.5px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 justify-content-between align-items-center">
+            <a href="{{ url_for('asset_import_template') }}" class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-download me-1"></i>Download Template
+            </a>
+            <button type="submit" class="btn btn-success px-4" id="submitBtn" disabled>
+              <i class="bi bi-cloud-upload me-1"></i>Import
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Instructions card -->
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header fw-bold" style="font-size:14px;">
+        <i class="bi bi-info-circle me-2 text-primary"></i>How it works
+      </div>
+      <div class="card-body p-4" style="font-size:13px;">
+        <ol class="ps-3 mb-3" style="line-height:2;">
+          <li>Download the <a href="{{ url_for('asset_import_template') }}">Excel template</a></li>
+          <li>Fill in your asset data — one row per asset</li>
+          <li>Upload the file here and click <strong>Import</strong></li>
+        </ol>
+
+        <p class="fw-semibold mb-2">Supported columns:</p>
+        <div class="d-flex flex-wrap gap-1 mb-3">
+          {% for col in ['Asset Tag *', 'Name', 'Category', 'Status', 'Location Type', 'Location',
+                         'Manufacturer', 'Model', 'CPU', 'RAM', 'OS Version', 'Serial Number',
+                         'Purchase Date', 'Purchase Cost', 'Supplier', 'Warranty Expiry',
+                         'Last Maintenance', 'Notes'] %}
+          <span class="badge bg-light text-dark border" style="font-size:10.5px;font-weight:500;">
+            {{ col }}
+          </span>
+          {% endfor %}
+        </div>
+        <div class="text-muted" style="font-size:12px;line-height:1.6;">
+          <i class="bi bi-asterisk text-danger me-1" style="font-size:9px;"></i><strong>Asset Tag</strong> is the only required column and acts as unique identifier.<br>
+          Dates must be in <code>YYYY-MM-DD</code> format.<br>
+          Status values: <code>available</code>, <code>in_use</code>, <code>maintenance</code>, <code>retired</code>, <code>disposed</code>.<br>
+          Location type values: <code>en_sitio</code>, <code>hibrido</code>, <code>foraneo</code>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const fileInput  = document.getElementById('fileInput');
+const preview    = document.getElementById('filePreview');
+const fileName   = document.getElementById('fileName');
+const fileSize   = document.getElementById('fileSize');
+const submitBtn  = document.getElementById('submitBtn');
+
+fileInput.addEventListener('change', () => {
+  const f = fileInput.files[0];
+  if (f) {
+    fileName.textContent  = f.name;
+    fileSize.textContent  = (f.size / 1024).toFixed(1) + ' KB';
+    preview.classList.remove('d-none');
+    submitBtn.disabled = false;
+  } else {
+    preview.classList.add('d-none');
+    submitBtn.disabled = true;
+  }
+});
+</script>
+{% endblock %}

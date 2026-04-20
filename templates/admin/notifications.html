@@ -11,6 +11,7 @@
 
 {% block content %}
 <form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <input type="hidden" name="action" value="save">
 
 <div class="row g-4">

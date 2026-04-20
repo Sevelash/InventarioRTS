@@ -86,6 +86,7 @@
               </a>
               {% if not cli.assets %}
               <form action="{{ url_for('client_delete', id=cli.id) }}" method="post" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-outline-danger py-0 px-2" title="Eliminar"
                         onclick="return confirm('¿Eliminar el cliente {{ cli.name }}?')">
                   <i class="bi bi-trash"></i>

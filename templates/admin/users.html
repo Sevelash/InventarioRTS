@@ -65,6 +65,7 @@
               </a>
               <!-- Toggle activo/inactivo -->
               <form action="{{ url_for('admin.user_toggle', id=u.id) }}" method="post" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm py-0 px-2 {{ 'btn-outline-warning' if u.active else 'btn-outline-success' }}"
                         title="{{ 'Desactivar' if u.active else 'Activar' }}"
                         onclick="return confirm('¿{{ 'Desactivar' if u.active else 'Activar' }} al usuario {{ u.name }}?')">
@@ -74,6 +75,7 @@
               <!-- Eliminar -->
               {% if u.id != current_user.id %}
               <form action="{{ url_for('admin.user_delete', id=u.id) }}" method="post" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-outline-danger py-0 px-2" title="Eliminar"
                         onclick="return confirm('¿Eliminar al usuario {{ u.name }}? Esta acción no se puede deshacer.')">
                   <i class="bi bi-trash"></i>

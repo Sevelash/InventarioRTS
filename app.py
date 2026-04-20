@@ -1,13 +1,39 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
 from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action, ALL_MODULES, Department, AccessRequest
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from i18n import get_translations, SUPPORTED_LANGS, DEFAULT_LANG
 import os
+from extensions import limiter, csrf
+
+# Load .env file if present (dev convenience)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'rts-inventory-2026-secret-key-change-in-prod'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///rts_inventory.db'
+
+# ── Security: require SECRET_KEY in production ────────────────────────────
+_secret = os.environ.get('SECRET_KEY', '')
+if not _secret:
+    import secrets as _secrets
+    _secret = _secrets.token_hex(32)
+    print('WARNING: SECRET_KEY not set — using a random key (sessions will reset on restart)')
+app.config['SECRET_KEY'] = _secret
+
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///rts_inventory.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# ── Session security ──────────────────────────────────────────────────────
+app.config['PERMANENT_SESSION_LIFETIME']  = timedelta(hours=8)
+app.config['SESSION_COOKIE_SECURE']       = os.environ.get('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_HTTPONLY']     = True
+app.config['SESSION_COOKIE_SAMESITE']     = 'Lax'
+
+# ── CSRF + Rate limiter (from extensions.py — shared to avoid circular imports) ───
+csrf.init_app(app)
+limiter.init_app(app)
 
 db.init_app(app)
 
@@ -35,6 +61,49 @@ app.register_blueprint(repo_bp)
 from reports import reports_bp
 app.register_blueprint(reports_bp)
 
+# ── Security headers ──────────────────────────────────────────────────────
+@app.after_request
+def set_security_headers(response):
+    response.headers['X-Frame-Options']           = 'DENY'
+    response.headers['X-Content-Type-Options']    = 'nosniff'
+    response.headers['X-XSS-Protection']          = '1; mode=block'
+    response.headers['Referrer-Policy']           = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy']        = 'geolocation=(), microphone=(), camera=()'
+    if os.environ.get('FLASK_ENV') == 'production':
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; "
+        "font-src 'self' fonts.gstatic.com cdn.jsdelivr.net; "
+        "img-src 'self' data:; "
+        "connect-src 'self';"
+    )
+    response.headers['Content-Security-Policy'] = csp
+    return response
+
+
+# ── Idle timeout (30 min inactivity) ─────────────────────────────────────
+IDLE_TIMEOUT = timedelta(minutes=30)
+
+@app.before_request
+def check_idle_timeout():
+    if not session.get('user'):
+        return
+    last = session.get('_last_activity')
+    now  = datetime.utcnow()
+    if last:
+        from datetime import datetime as _dt
+        last_dt = _dt.fromisoformat(last)
+        if now - last_dt > IDLE_TIMEOUT:
+            session.clear()
+            flash('Tu sesión expiró por inactividad.', 'warning')
+            from flask import redirect as _red, url_for as _ufor
+            return _red(_ufor('auth.login'))
+    session['_last_activity'] = now.isoformat()
+    session.modified = True
+
+
 with app.app_context():
     db.create_all()
 
@@ -58,6 +127,13 @@ with app.app_context():
     _add_col_if_missing('users', 'module_access', 'TEXT')
     _add_col_if_missing('users', 'department_id', 'INTEGER')
 
+    # security fields on users
+    for col, typ in [('totp_secret', 'VARCHAR(32)'), ('mfa_enabled', 'INTEGER DEFAULT 0'),
+                     ('force_password_change', 'INTEGER DEFAULT 0'),
+                     ('failed_logins', 'INTEGER DEFAULT 0'),
+                     ('locked_until', 'DATETIME')]:
+        _add_col_if_missing('users', col, typ)
+
     # task_comments and project_activities — created by db.create_all() above
     for col, typ in [('icon', 'VARCHAR(50)'), ('color', 'VARCHAR(20)')]:
         _add_col_if_missing('project_activities', col, typ)
@@ -80,11 +156,15 @@ with app.app_context():
     # Crear admin por defecto si no existe ningún usuario
     from models import User
     if User.query.count() == 0:
-        admin = User(name='Administrador', username='admin', role='admin')
-        admin.set_password('rts2026')
+        import secrets as _sec
+        tmp_pwd = _sec.token_urlsafe(16)
+        admin = User(name='Administrador', username='admin', role='admin',
+                     force_password_change=True)
+        admin.set_password(tmp_pwd)
         db.session.add(admin)
         db.session.commit()
-        print('✅  Usuario admin creado  →  admin / rts2026')
+        print(f'Usuario admin creado  ->  admin / {tmp_pwd}')
+        print('Cambia la contrasena en el primer inicio de sesion.')
 
 # ── Static image helpers ──────────────────────────────────────────────────────
 STATIC = os.path.join(os.path.dirname(__file__), 'static', 'images')
@@ -321,6 +401,16 @@ def inventory_dashboard():
 
     active_dept = Department.query.get(dept_filter) if dept_filter else None
 
+    # Warranty expiry alerts (30 / 60 days)
+    soon_30 = date.today() + timedelta(days=30)
+    soon_60 = date.today() + timedelta(days=60)
+    warranty_expiring = _asset_q().filter(
+        Asset.warranty_expiry != None,          # noqa: E711
+        Asset.warranty_expiry <= soon_60,
+        Asset.warranty_expiry >= date.today(),
+        Asset.status.notin_(['retired', 'disposed'])
+    ).order_by(Asset.warranty_expiry).limit(10).all()
+
     return render_template('inventory/dashboard.html',
                            total_assets=total_assets, available=available,
                            in_use=in_use, maintenance=maintenance, retired=retired,
@@ -334,6 +424,8 @@ def inventory_dashboard():
                            chart_start_year=chart_start_year,
                            chart_current_year=date.today().year,
                            active_dept=active_dept,
+                           warranty_expiring=warranty_expiring,
+                           soon_30=soon_30,
                            departments=Department.query.filter_by(active=True).order_by(Department.name).all())
 
 
@@ -362,11 +454,15 @@ def assets_list():
         query = query.filter_by(category_id=category_filter)
     if loc_filter:
         query = query.filter_by(location_type=loc_filter)
-    assets     = query.order_by(Asset.asset_tag).all()
+    page       = request.args.get('page', 1, type=int)
+    per_page   = 50
+    pagination = query.order_by(Asset.asset_tag).paginate(page=page, per_page=per_page, error_out=False)
+    assets     = pagination.items
     categories = Category.query.order_by(Category.name).all()
     return render_template('assets/list.html', assets=assets, categories=categories,
                            q=q, status_filter=status_filter,
-                           category_filter=category_filter, loc_filter=loc_filter)
+                           category_filter=category_filter, loc_filter=loc_filter,
+                           pagination=pagination)
 
 
 @app.route('/assets/new', methods=['GET', 'POST'])
@@ -419,7 +515,13 @@ def asset_new():
 def asset_detail(id):
     asset      = Asset.query.get_or_404(id)
     return_url = request.args.get('return_url') or url_for('assets_list')
-    return render_template('assets/detail.html', asset=asset, return_url=return_url)
+    # Per-asset audit history
+    history = AuditLog.query.filter(
+        AuditLog.entity_type == 'asset',
+        AuditLog.entity_id   == id,
+    ).order_by(AuditLog.created_at.desc()).limit(50).all()
+    return render_template('assets/detail.html', asset=asset, return_url=return_url,
+                           history=history)
 
 
 @app.route('/assets/<int:id>/edit', methods=['GET', 'POST'])
@@ -507,9 +609,11 @@ def employees_list():
             Employee.name.ilike(like), Employee.employee_id.ilike(like),
             Employee.department.ilike(like), Employee.email.ilike(like)
         ))
-    employees = query.order_by(Employee.name).all()
+    page       = request.args.get('page', 1, type=int)
+    pagination = query.order_by(Employee.name).paginate(page=page, per_page=50, error_out=False)
+    employees  = pagination.items
     return render_template('employees/list.html', employees=employees,
-                           q=q, show_inactive=show_inactive)
+                           q=q, show_inactive=show_inactive, pagination=pagination)
 
 
 @app.route('/employees/new', methods=['GET', 'POST'])
@@ -717,9 +821,12 @@ def shipments_list():
     query = Shipment.query
     if status_filter:
         query = query.filter_by(status=status_filter)
-    shipments = query.order_by(Shipment.created_at.desc()).all()
+    page       = request.args.get('page', 1, type=int)
+    pagination = query.order_by(Shipment.created_at.desc()).paginate(page=page, per_page=50, error_out=False)
+    shipments  = pagination.items
     return render_template('shipments/list.html',
-                           shipments=shipments, status_filter=status_filter)
+                           shipments=shipments, status_filter=status_filter,
+                           pagination=pagination)
 
 
 @app.route('/shipments/new', methods=['GET', 'POST'])
@@ -896,6 +1003,296 @@ def format_currency(value):
     return f'${value:,.2f} MXN'
 
 
+# ── Import Assets from Excel ──────────────────────────────────────────────────
+
+@app.route('/assets/import', methods=['GET', 'POST'])
+@module_required('inventory')
+def asset_import():
+    if request.method == 'POST':
+        f = request.files.get('file')
+        if not f or not f.filename.endswith(('.xlsx', '.xls')):
+            flash('Please upload a valid Excel file (.xlsx).', 'danger')
+            return redirect(url_for('asset_import'))
+
+        import openpyxl
+        try:
+            wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
+            ws = wb.active
+            rows = list(ws.iter_rows(values_only=True))
+        except Exception as e:
+            flash(f'Could not read file: {e}', 'danger')
+            return redirect(url_for('asset_import'))
+
+        if len(rows) < 2:
+            flash('File appears empty (no data rows).', 'warning')
+            return redirect(url_for('asset_import'))
+
+        # Map header → column index (case-insensitive)
+        header = [str(h).strip().lower() if h else '' for h in rows[0]]
+        def col(name):
+            try: return header.index(name.lower())
+            except ValueError: return None
+
+        cat_cache = {c.name.lower(): c for c in Category.query.all()}
+        created = updated = skipped = 0
+        errors  = []
+
+        for i, row in enumerate(rows[1:], start=2):
+            def v(name, default=''):
+                idx = col(name)
+                val = row[idx] if idx is not None and idx < len(row) else None
+                return str(val).strip() if val is not None else default
+
+            tag = v('asset tag')
+            if not tag:
+                errors.append(f'Row {i}: missing asset tag — skipped.')
+                skipped += 1
+                continue
+
+            existing = Asset.query.filter_by(asset_tag=tag).first()
+            cat_name = v('category')
+            category = cat_cache.get(cat_name.lower()) if cat_name else None
+            if cat_name and not category:
+                category = Category(name=cat_name)
+                db.session.add(category)
+                db.session.flush()
+                cat_cache[cat_name.lower()] = category
+
+            fields = {
+                'name':         v('name') or tag,
+                'asset_tag':    tag,
+                'serial_number': v('serial number') or None,
+                'manufacturer': v('manufacturer') or None,
+                'model':        v('model') or None,
+                'cpu':          v('cpu') or None,
+                'ram':          v('ram') or None,
+                'os_version':   v('os version') or None,
+                'location':     v('location') or None,
+                'location_type': v('location type') or 'en_sitio',
+                'supplier':     v('supplier') or None,
+                'notes':        v('notes') or None,
+                'status':       v('status') or 'available',
+                'category_id':  category.id if category else None,
+            }
+            # Parse dates
+            for df in ['purchase date', 'warranty expiry', 'last maintenance']:
+                val = v(df)
+                field_name = df.replace(' ', '_')
+                if val:
+                    try:
+                        import datetime as _dt
+                        if isinstance(val, _dt.date):
+                            fields[field_name] = val
+                        else:
+                            fields[field_name] = _dt.datetime.strptime(val[:10], '%Y-%m-%d').date()
+                    except Exception:
+                        pass
+            # Cost
+            cost_val = v('purchase cost')
+            if cost_val:
+                try: fields['purchase_cost'] = float(str(cost_val).replace(',', '').replace('$', ''))
+                except Exception: pass
+
+            if existing:
+                for k, val in fields.items():
+                    if val is not None and val != '':
+                        setattr(existing, k, val)
+                log_action('update', 'asset', entity_id=existing.id,
+                           entity_name=existing.asset_tag, details='Updated via Excel import')
+                updated += 1
+            else:
+                asset = Asset(**{k: v_ for k, v_ in fields.items() if v_ is not None and v_ != ''})
+                db.session.add(asset)
+                log_action('create', 'asset', entity_name=tag, details='Created via Excel import')
+                created += 1
+
+        db.session.commit()
+        msg = f'Import complete: {created} created, {updated} updated, {skipped} skipped.'
+        if errors:
+            msg += f' ({len(errors)} errors — check logs.)'
+        flash(msg, 'success' if not errors else 'warning')
+        return redirect(url_for('assets_list'))
+
+    # Template shows download link for the import template
+    categories = Category.query.order_by(Category.name).all()
+    return render_template('assets/import.html', categories=categories)
+
+
+@app.route('/assets/import/template.xlsx')
+@module_required('inventory')
+def asset_import_template():
+    """Download a blank Excel template for importing assets."""
+    import openpyxl, io
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Assets'
+    from openpyxl.styles import PatternFill, Font, Alignment
+    headers = [
+        'Asset Tag', 'Name', 'Category', 'Status', 'Location Type', 'Location',
+        'Manufacturer', 'Model', 'CPU', 'RAM', 'OS Version', 'Serial Number',
+        'Purchase Date', 'Purchase Cost', 'Supplier', 'Warranty Expiry',
+        'Last Maintenance', 'Notes',
+    ]
+    navy = PatternFill('solid', fgColor='233C6E')
+    for ci, h in enumerate(headers, 1):
+        c = ws.cell(1, ci, value=h)
+        c.fill = navy
+        c.font = Font(name='Calibri', bold=True, color='FFFFFF', size=11)
+        c.alignment = Alignment(horizontal='center', vertical='center')
+        ws.column_dimensions[openpyxl.utils.get_column_letter(ci)].width = max(len(h) + 4, 14)
+    ws.row_dimensions[1].height = 22
+    ws.freeze_panes = 'A2'
+    # Example row
+    example = ['RTS-001', 'Sample Laptop', 'Laptops', 'available', 'en_sitio', 'Office',
+               'Dell', 'Latitude 5540', 'Intel Core i7', '16 GB', 'Windows 11', 'SN123456',
+               '2024-01-15', '25000', 'CompuMexicana', '2026-01-15', '2025-06-01', 'Example row']
+    for ci, val in enumerate(example, 1):
+        ws.cell(2, ci, value=val)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(buf,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True,
+                     download_name='RTS_Asset_Import_Template.xlsx')
+
+
+# ── Bulk Asset Operations ─────────────────────────────────────────────────────
+
+@app.route('/assets/bulk', methods=['POST'])
+@csrf.exempt
+@module_required('inventory')
+def asset_bulk():
+    from flask import jsonify
+    ids    = request.form.getlist('ids[]')
+    action = request.form.get('action')
+    if not ids or not action:
+        return jsonify({'ok': False, 'error': 'Missing ids or action'})
+
+    assets = Asset.query.filter(Asset.id.in_([int(i) for i in ids])).all()
+    changed = 0
+
+    if action in ('available', 'in_use', 'maintenance', 'retired', 'disposed'):
+        for a in assets:
+            a.status = action
+            log_action('update', 'asset', entity_id=a.id, entity_name=a.asset_tag,
+                       details=f'Bulk status → {action}')
+            changed += 1
+    elif action.startswith('dept:'):
+        dept_id = int(action.split(':')[1]) or None
+        for a in assets:
+            a.department_id = dept_id
+            log_action('update', 'asset', entity_id=a.id, entity_name=a.asset_tag,
+                       details=f'Bulk dept → {dept_id}')
+            changed += 1
+    else:
+        return jsonify({'ok': False, 'error': 'Unknown action'})
+
+    db.session.commit()
+    return jsonify({'ok': True, 'changed': changed})
+
+
+@app.route('/search')
+@csrf.exempt
+@login_required
+def global_search():
+    from flask import jsonify
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify({'assets': [], 'employees': [], 'projects': []})
+
+    like = f'%{q}%'
+    results = {'assets': [], 'employees': [], 'projects': []}
+
+    # Assets
+    from models import User as _User
+    sess_user = session.get('user', {})
+    is_admin  = sess_user.get('role') == 'admin'
+    db_user   = _User.query.get(sess_user.get('id')) if sess_user.get('id') else None
+    dept_filter = None
+    if not is_admin and db_user and db_user.department_id:
+        dept_filter = db_user.department_id
+
+    aq = Asset.query.filter(db.or_(
+        Asset.name.ilike(like), Asset.asset_tag.ilike(like),
+        Asset.serial_number.ilike(like), Asset.manufacturer.ilike(like),
+        Asset.model.ilike(like),
+    ))
+    if dept_filter:
+        aq = aq.filter_by(department_id=dept_filter)
+    for a in aq.limit(6).all():
+        results['assets'].append({
+            'title': a.asset_tag,
+            'sub':   a.name + (' · ' + a.category.name if a.category else ''),
+            'url':   url_for('asset_detail', id=a.id),
+        })
+
+    # Employees
+    for e in Employee.query.filter(db.or_(
+        Employee.name.ilike(like), Employee.employee_id.ilike(like),
+        Employee.email.ilike(like), Employee.department.ilike(like),
+    )).limit(5).all():
+        results['employees'].append({
+            'title': e.name,
+            'sub':   e.employee_id + (f' · {e.department}' if e.department else ''),
+            'url':   url_for('employee_edit', id=e.id),
+        })
+
+    # Projects (if module access)
+    from models import Project
+    if is_admin or 'projects' in sess_user.get('modules', []):
+        for p in Project.query.filter(db.or_(
+            Project.name.ilike(like), Project.code.ilike(like),
+        )).limit(5).all():
+            results['projects'].append({
+                'title': p.name,
+                'sub':   p.code + f' · {p.status.replace("_"," ").title()}',
+                'url':   url_for('projects.project_detail', id=p.id),
+            })
+
+    return jsonify(results)
+
+
+# ── User Profile ──────────────────────────────────────────────────────────────
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def user_profile():
+    from models import User as _User
+    uid  = session['user']['id']
+    user = _User.query.get_or_404(uid)
+
+    if request.method == 'POST':
+        name  = request.form.get('name', '').strip()
+        email = request.form.get('email', '').strip() or None
+        pwd   = request.form.get('password', '').strip()
+        pwd2  = request.form.get('password2', '').strip()
+
+        if not name:
+            flash('Name cannot be empty.', 'danger')
+            return render_template('profile.html', user=user)
+        if pwd and pwd != pwd2:
+            flash('Passwords do not match.', 'danger')
+            return render_template('profile.html', user=user)
+
+        user.name  = name
+        user.email = email
+        if pwd:
+            user.set_password(pwd)
+        # Refresh session
+        session['user']['name']  = user.name
+        session['user']['email'] = user.email
+        session.modified = True
+
+        log_action('update', 'user', entity_id=uid, entity_name=user.name,
+                   details='Profile updated by user')
+        db.session.commit()
+        flash('Profile updated successfully.', 'success')
+        return redirect(url_for('user_profile'))
+
+    return render_template('profile.html', user=user)
+
+
 @app.route('/lang/<code>')
 @login_required
 def set_lang(code):
@@ -906,17 +1303,44 @@ def set_lang(code):
 
 @app.context_processor
 def inject_globals():
-    lang = session.get('lang', DEFAULT_LANG)
+    lang       = session.get('lang', DEFAULT_LANG)
     other_lang = 'es' if lang == 'en' else 'en'
+    u          = session.get('user')
+
+    # Pending access-requests count (admins only — shown in topbar badge)
+    pending_requests_count = 0
+    if u and u.get('role') == 'admin':
+        try:
+            pending_requests_count = AccessRequest.query.filter_by(status='pending').count()
+        except Exception:
+            pass
+
+    # Warranty alerts for topbar (assets expiring in ≤30 days)
+    warranty_alerts = 0
+    if u and (u.get('role') == 'admin' or 'inventory' in u.get('modules', [])):
+        try:
+            soon = date.today() + timedelta(days=30)
+            warranty_alerts = Asset.query.filter(
+                Asset.warranty_expiry != None,        # noqa: E711
+                Asset.warranty_expiry <= soon,
+                Asset.warranty_expiry >= date.today(),
+                Asset.status.notin_(['retired', 'disposed'])
+            ).count()
+        except Exception:
+            pass
+
     return {
         'today': date.today(),
-        'current_user': session.get('user'),
+        'current_user': u,
         'logo_exists': _img_exists('logo.png'),
         'remoties_exists': _img_exists('remoties.png'),
+        'favicon_exists': _img_exists('favicon.png'),
         'ALL_MODULES': ALL_MODULES,
         'T': get_translations(lang),
         'lang': lang,
         'other_lang': other_lang,
+        'pending_requests_count': pending_requests_count,
+        'warranty_alerts': warranty_alerts,
         'STATUS_BADGES': {
             'available':   'success',
             'in_use':      'primary',
@@ -948,5 +1372,22 @@ def inject_globals():
     }
 
 
+@app.errorhandler(403)
+def forbidden(e):
+    return render_template('errors/403.html'), 403
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template('errors/404.html'), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    return render_template('errors/500.html'), 500
+
+@app.errorhandler(429)
+def rate_limited(e):
+    return render_template('errors/429.html'), 429
+
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5050)
+    app.run(debug=os.environ.get('FLASK_DEBUG', '0') == '1', port=5050, host='0.0.0.0')

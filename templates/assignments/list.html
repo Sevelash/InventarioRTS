@@ -76,6 +76,7 @@
               {% if not a.returned_date %}
               <form action="{{ url_for('assignment_return', id=a.id) }}" method="post" class="d-inline"
                     onsubmit="return confirm('¿Registrar devolución de {{ a.asset.name }}?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="returned_date" value="{{ today }}">
                 <button type="submit" class="btn btn-sm btn-warning py-0 px-2">
                   <i class="bi bi-arrow-return-left"></i> Devolver

@@ -1,7 +1,12 @@
 {% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
 
-{% block title %}{{ asset.name }} - RTS Asset Management{% endblock %}
-{% block page_title %}Detalle de Activo{% endblock %}
+{% block title %}{{ asset.asset_tag }} — {{ asset.name }} - RTS{% endblock %}
+{% block page_title %}Asset Detail{% endblock %}
+
+{% block breadcrumb %}
+  {{ breadcrumbs([('Inventory', url_for('inventory_dashboard')), ('Assets', url_for('assets_list')), (asset.asset_tag, none)]) }}
+{% endblock %}
 
 {% block topbar_actions %}
   <a href="{{ return_url }}" class="btn btn-outline-secondary btn-sm">
@@ -249,6 +254,7 @@
           <hr>
           <form action="{{ url_for('assignment_return', id=ca.id) }}" method="post"
                 onsubmit="return confirm('¿Confirmar devolución?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="returned_date" value="{{ today }}">
             <button type="submit" class="btn btn-warning btn-sm w-100">
               <i class="bi bi-arrow-return-left me-1"></i>Registrar Devolución
@@ -316,4 +322,49 @@
 
   </div>
 </div>
+
+<!-- ── Asset History ──────────────────────────────────────── -->
+{% if history %}
+<div class="card mt-3">
+  <div class="card-header d-flex align-items-center gap-2">
+    <i class="bi bi-clock-history text-muted"></i>
+    <span>Asset History</span>
+    <span class="badge bg-secondary ms-1" style="font-size:10px;">{{ history|length }}</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" style="font-size:12.5px;">
+        <thead style="background:#F4F6FA;">
+          <tr>
+            <th class="ps-3">Date</th>
+            <th>Action</th>
+            <th>By</th>
+            <th class="pe-3">Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in history %}
+          {% set action_colors = {'create':'success','update':'primary','delete':'danger','login':'info','upload':'warning'} %}
+          <tr>
+            <td class="ps-3 text-muted" style="white-space:nowrap;">
+              {{ log.created_at.strftime('%d/%m/%Y %H:%M') if log.created_at else '—' }}
+            </td>
+            <td>
+              <span class="badge bg-{{ action_colors.get(log.action, 'secondary') }}">
+                {{ log.action }}
+              </span>
+            </td>
+            <td class="fw-semibold">{{ log.user_name or '—' }}</td>
+            <td class="pe-3 text-muted" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              {{ log.details or '—' }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}

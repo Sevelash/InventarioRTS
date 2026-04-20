@@ -151,6 +151,7 @@
       <div class="card-header"><i class="bi bi-arrow-repeat me-2"></i>Actualizar Estado</div>
       <div class="card-body">
         <form action="{{ url_for('shipment_edit', id=shipment.id) }}" method="post" class="row g-2 align-items-end">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <!-- Reenviar todos los campos actuales para no perderlos -->
           <input type="hidden" name="carrier"          value="{{ shipment.carrier }}">
           <input type="hidden" name="tracking_number"  value="{{ shipment.tracking_number }}">

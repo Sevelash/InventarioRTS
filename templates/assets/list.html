@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import pagination_bar, breadcrumbs %}
 
 {% block title %}Activos - RTS Asset Management{% endblock %}
 {% block page_title %}Activos{% endblock %}
@@ -8,10 +9,15 @@
      class="btn btn-outline-success btn-sm">
     <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
   </a>
+  <a href="{{ url_for('asset_import') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-file-earmark-arrow-up me-1"></i>Import
+  </a>
   <a href="{{ url_for('asset_new', return_url=request.url) }}" class="btn btn-rts btn-sm">
     <i class="bi bi-plus-lg me-1"></i>Nuevo Activo
   </a>
 {% endblock %}
+
+{% block breadcrumb %}{{ breadcrumbs([('Inventory', url_for('inventory_dashboard')), ('Assets', none)]) }}{% endblock %}
 
 {% block content %}
 
@@ -100,7 +106,7 @@
 <!-- ── Tabla ───────────────────────────────────────────────── -->
 <div class="card">
   <div class="card-header d-flex align-items-center justify-content-between">
-    <span><i class="bi bi-laptop me-2"></i>{{ assets|length }} activo(s)</span>
+    <span><i class="bi bi-laptop me-2"></i>{{ pagination.total if pagination else assets|length }} activo(s)</span>
     {% if category_filter %}
     <span style="font-size:11.5px;color:var(--rts-gray);">
       <i class="bi bi-funnel me-1"></i>filtrado por categoría
@@ -113,7 +119,10 @@
       <table class="table table-hover mb-0" style="font-size:13px;">
         <thead>
           <tr>
-            <th class="ps-3" style="width:110px;">ID Activo</th>
+            <th class="ps-3" style="width:36px;">
+              <input type="checkbox" id="selectAll" class="form-check-input" title="Select all">
+            </th>
+            <th style="width:110px;">ID Activo</th>
             <th style="width:130px;">Cliente</th>
             <th style="width:90px;">ID Empleado</th>
             <th>Nombre Empleado</th>
@@ -133,8 +142,12 @@
           {% for asset in assets %}
           {% set ca = asset.current_assignment %}
           <tr>
-            <!-- ID Activo -->
+            <!-- Checkbox -->
             <td class="ps-3">
+              <input type="checkbox" class="form-check-input asset-cb" value="{{ asset.id }}" title="Select">
+            </td>
+            <!-- ID Activo -->
+            <td>
               <a href="{{ url_for('asset_detail', id=asset.id, return_url=current_url) }}"
                  class="text-decoration-none">
                 <span class="asset-tag-badge">{{ asset.asset_tag }}</span>
@@ -234,6 +247,7 @@
               <form action="{{ url_for('asset_delete', id=asset.id) }}" method="post"
                     class="d-inline"
                     onsubmit="return confirm('¿Eliminar {{ asset.name }}?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-outline-danger py-0 px-2" title="Eliminar">
                   <i class="bi bi-trash"></i>
                 </button>
@@ -255,6 +269,30 @@
       {% endif %}
     </div>
     {% endif %}
+    {{ pagination_bar(pagination, 'assets_list', {'q': q, 'status': status_filter, 'category': category_filter, 'location_type': loc_filter}) }}
+  </div>
+</div>
+
+<!-- ── Bulk action bar ────────────────────────────────────────── -->
+<div class="bulk-bar" id="bulkBar">
+  <span class="bulk-bar-count" id="bulkCount">0 selected</span>
+  <div class="d-flex gap-2 align-items-center">
+    <select class="form-select form-select-sm" id="bulkAction" style="width:auto;min-width:160px;">
+      <option value="">— Bulk Action —</option>
+      <optgroup label="Change Status">
+        <option value="status:available">Set → Available</option>
+        <option value="status:in_use">Set → In Use</option>
+        <option value="status:maintenance">Set → Maintenance</option>
+        <option value="status:retired">Set → Retired</option>
+        <option value="status:disposed">Set → Disposed</option>
+      </optgroup>
+    </select>
+    <button class="btn btn-sm btn-rts" id="bulkApply">
+      <i class="bi bi-check2 me-1"></i>Apply
+    </button>
+    <button class="btn btn-sm btn-outline-secondary" id="bulkCancel">
+      <i class="bi bi-x me-1"></i>Cancel
+    </button>
   </div>
 </div>
 
@@ -262,12 +300,84 @@
 
 {% block scripts %}
 <script>
-  // Al presionar Enter en el buscador, preserva el filtro de categoría actual
+  // ── Search enter key ─────────────────────────────────────────
   document.getElementById('searchInput').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
       e.preventDefault();
       document.getElementById('filterForm').submit();
     }
+  });
+
+  // ── Bulk selection ───────────────────────────────────────────
+  const selectAll  = document.getElementById('selectAll');
+  const bulkBar    = document.getElementById('bulkBar');
+  const bulkCount  = document.getElementById('bulkCount');
+  const bulkApply  = document.getElementById('bulkApply');
+  const bulkCancel = document.getElementById('bulkCancel');
+  const bulkAction = document.getElementById('bulkAction');
+
+  function getChecked() {
+    return [...document.querySelectorAll('.asset-cb:checked')];
+  }
+
+  function updateBulkBar() {
+    const checked = getChecked();
+    if (checked.length > 0) {
+      bulkCount.textContent = checked.length + ' selected';
+      bulkBar.classList.add('show');
+    } else {
+      bulkBar.classList.remove('show');
+    }
+  }
+
+  selectAll.addEventListener('change', () => {
+    document.querySelectorAll('.asset-cb').forEach(cb => cb.checked = selectAll.checked);
+    updateBulkBar();
+  });
+
+  document.querySelectorAll('.asset-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const all = document.querySelectorAll('.asset-cb');
+      selectAll.checked  = [...all].every(c => c.checked);
+      selectAll.indeterminate = !selectAll.checked && [...all].some(c => c.checked);
+      updateBulkBar();
+    });
+  });
+
+  bulkCancel.addEventListener('click', () => {
+    document.querySelectorAll('.asset-cb').forEach(cb => cb.checked = false);
+    selectAll.checked = false;
+    selectAll.indeterminate = false;
+    bulkBar.classList.remove('show');
+  });
+
+  bulkApply.addEventListener('click', () => {
+    const action = bulkAction.value;
+    if (!action) { alert('Please choose an action.'); return; }
+    const ids = getChecked().map(cb => parseInt(cb.value));
+    if (!ids.length) return;
+
+    const [type, value] = action.split(':');
+    fetch('/assets/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: type, value: value, ids: ids })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        // Show a quick toast then reload
+        const toast = document.createElement('div');
+        toast.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3 shadow';
+        toast.style.cssText = 'z-index:9999;font-size:13px;padding:8px 18px;border-radius:8px;';
+        toast.innerHTML = `<i class="bi bi-check-circle me-2"></i>${data.changed} asset(s) updated.`;
+        document.body.appendChild(toast);
+        setTimeout(() => location.reload(), 900);
+      } else {
+        alert('Error: ' + (data.error || 'Unknown error'));
+      }
+    })
+    .catch(() => alert('Network error. Please try again.'));
   });
 </script>
 {% endblock %}

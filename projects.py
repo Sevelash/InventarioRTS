@@ -3,7 +3,7 @@ from flask import (Blueprint, render_template, request, redirect,
 from models import (db, Project, Task, TaskComment, ProjectActivity,
                     ProjectMember, User, Client, log_action)
 from auth import module_required
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import notifications as notif
 
 projects_bp = Blueprint('projects', __name__, url_prefix='/projects')
@@ -76,6 +76,45 @@ def _add_activity(project_id: int, action: str, entity_type: str,
         color=color,
     )
     db.session.add(act)
+
+
+# ── My Tasks ──────────────────────────────────────────────────────────────────
+
+@projects_bp.route('/my-tasks')
+@module_required('projects')
+def my_tasks():
+    today  = date.today()
+    uid    = _current_user().get('id')
+    status = request.args.get('status', '')   # filter by status
+
+    query = Task.query.filter_by(assigned_to_id=uid)
+    if status:
+        query = query.filter_by(status=status)
+    else:
+        query = query.filter(Task.status.notin_(['done', 'cancelled']))
+
+    tasks = query.order_by(Task.due_date.asc().nullslast(), Task.created_at.desc()).all()
+
+    # Group by project
+    by_project = {}
+    for t in tasks:
+        proj = t.project
+        if proj.id not in by_project:
+            by_project[proj.id] = {'project': proj, 'tasks': []}
+        by_project[proj.id]['tasks'].append(t)
+
+    overdue_count = sum(1 for t in tasks if t.due_date and t.due_date < today
+                        and t.status not in ('done', 'cancelled'))
+    due_today     = sum(1 for t in tasks if t.due_date == today)
+
+    return render_template('projects/my_tasks.html',
+                           by_project=list(by_project.values()),
+                           tasks=tasks,
+                           status_filter=status,
+                           overdue_count=overdue_count,
+                           due_today=due_today,
+                           today=today,
+                           **_MAPS)
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -151,6 +190,52 @@ def project_list():
         projects=projects, clients=clients, today=date.today(),
         q=q, status_filter=status_filter,
         priority_filter=priority_filter, client_filter=client_filter, **_MAPS)
+
+
+# ── Project Gantt ─────────────────────────────────────────────────────────────
+
+@projects_bp.route('/<int:id>/gantt')
+@module_required('projects')
+def project_gantt(id):
+    project = Project.query.get_or_404(id)
+    today   = date.today()
+    # Build task data with position calculations
+    start = project.start_date or today
+    end   = project.end_date   or (today + timedelta(days=30))
+    total_days = max((end - start).days, 1)
+
+    tasks_data = []
+    for t in project.tasks:
+        if t.status == 'cancelled':
+            continue
+        t_start = start   # fallback to project start
+        t_end   = t.due_date or end
+        if t_end < start:
+            t_end = start
+        s_pct = max(0, min(100, (t_start - start).days / total_days * 100))
+        w_pct = max(1,  min(100 - s_pct, (t_end - t_start).days / total_days * 100))
+        overdue = t.due_date and t.due_date < today and t.status not in ('done','cancelled')
+        tasks_data.append({
+            'id':       t.id,
+            'title':    t.title,
+            'status':   t.status,
+            'priority': t.priority,
+            'due_date': t.due_date,
+            'assigned': t.assigned_to.name if t.assigned_to else None,
+            's_pct':    round(s_pct, 1),
+            'w_pct':    round(w_pct, 1),
+            'overdue':  overdue,
+            'done':     t.status == 'done',
+        })
+
+    return render_template('projects/gantt.html',
+                           project=project,
+                           tasks_data=tasks_data,
+                           start=start,
+                           end=end,
+                           total_days=total_days,
+                           today=today,
+                           **_MAPS)
 
 
 # ── Project New ───────────────────────────────────────────────────────────────

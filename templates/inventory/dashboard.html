@@ -63,7 +63,39 @@
   </div>
 {% endblock %}
 
+{% block breadcrumb %}
+<div class="rts-breadcrumb">
+  <i class="bi bi-house-door me-1"></i>
+  <a href="{{ url_for('portal') }}">Portal</a>
+  <span class="bc-sep">/</span>
+  <span class="bc-current">Inventory Dashboard</span>
+</div>
+{% endblock %}
+
 {% block content %}
+
+<!-- Warranty expiry alert banner -->
+{% if warranty_expiring %}
+<div class="warranty-alert-banner" id="warranty-alerts">
+  <i class="bi bi-exclamation-triangle-fill" style="font-size:1.3rem;flex-shrink:0;"></i>
+  <div>
+    <strong>{{ warranty_expiring|length }} asset{{ 's' if warranty_expiring|length > 1 }} with warranty expiring within 60 days:</strong>
+    <div class="mt-1 d-flex flex-wrap gap-2">
+      {% for a in warranty_expiring %}
+      {% set days_left = (a.warranty_expiry - today).days %}
+      <a href="{{ url_for('asset_detail', id=a.id) }}" style="white-space:nowrap;">
+        <span class="badge {{ 'bg-danger' if days_left <= 30 else 'bg-warning text-dark' }}">
+          {{ a.asset_tag }}
+        </span>
+        <span style="font-size:11.5px;">{{ a.name[:20] }} — {{ days_left }}d left</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  <button type="button" class="btn-close ms-auto" style="opacity:.5;"
+          onclick="this.closest('.warranty-alert-banner').remove()"></button>
+</div>
+{% endif %}
 
 <!-- ══════════════════════════════════════════════════════════
      1. GRÁFICA — arriba del todo
