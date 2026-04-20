@@ -22,7 +22,9 @@ if not _secret:
     print('WARNING: SECRET_KEY not set — using a random key (sessions will reset on restart)')
 app.config['SECRET_KEY'] = _secret
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///rts_inventory.db')
+# Default: siempre apunta a instance/rts_inventory.db relativo al directorio del script
+_default_db = 'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'rts_inventory.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', _default_db)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # ── Session security ──────────────────────────────────────────────────────
