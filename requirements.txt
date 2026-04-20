@@ -15,5 +15,5 @@ Pillow>=10.0.0
 filetype==1.2.0
 
 # Producción (servidor WSGI robusto)
-waitress==3.0.1        # Windows
-# gunicorn==22.0.0     # Linux/macOS — descomentar si se despliega en Linux
+waitress==3.0.1        # Windows (desarrollo local)
+gunicorn==22.0.0       # Linux/macOS — Docker usa este

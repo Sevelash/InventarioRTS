@@ -1,0 +1,42 @@
+# Secrets — NUNCA dentro de la imagen
+.env
+.env.*
+*.env
+
+# Base de datos local (va en el volume, no en la imagen)
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Git
+.git/
+.gitignore
+
+# Dev / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs locales
+*.log
+/tmp/
+
+# Tests
+tests/
+test_*.py
+pytest.ini
+.pytest_cache/
+
+# Docs que no necesita el servidor
+*.md
+docs/
