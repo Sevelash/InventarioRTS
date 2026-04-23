@@ -63,6 +63,19 @@ app.register_blueprint(repo_bp)
 from reports import reports_bp
 app.register_blueprint(reports_bp)
 
+# ── Jinja2 custom filters ─────────────────────────────────────────────────────
+import json as _json_mod
+
+@app.template_filter('from_json')
+def from_json_filter(value):
+    """Deserializa JSON almacenado en la DB para usarlo en templates."""
+    if not value:
+        return []
+    try:
+        return _json_mod.loads(value)
+    except Exception:
+        return []
+
 # ── Security headers ──────────────────────────────────────────────────────
 @app.after_request
 def set_security_headers(response):
@@ -914,6 +927,50 @@ def shipment_delete(id):
     return redirect(url_for('shipments_list'))
 
 
+# ── Package Tracking (AfterShip) ─────────────────────────────────────────────
+
+@app.route('/shipments/<int:id>/track', methods=['POST'])
+@login_required
+@csrf.exempt   # llamado también vía fetch desde el detalle
+def shipment_track(id):
+    """Rastrear un envío ahora mismo y actualizar su estado."""
+    import tracking as trk
+    shipment = Shipment.query.get_or_404(id)
+
+    if not trk._API_KEY:
+        return jsonify({'ok': False, 'error': 'AFTERSHIP_API_KEY no configurado en .env'}), 503
+
+    ok = trk.refresh_shipment(shipment)
+    if ok:
+        db.session.commit()
+        import json as _json
+        events = []
+        if shipment.tracking_events:
+            try:
+                events = _json.loads(shipment.tracking_events)
+            except Exception:
+                pass
+        return jsonify({
+            'ok':       True,
+            'status':   shipment.status,
+            'tag':      shipment.tracking_tag,
+            'eta':      shipment.est_delivery_afship.isoformat() if shipment.est_delivery_afship else None,
+            'updated':  shipment.last_tracking_at.strftime('%d/%m/%Y %H:%M') if shipment.last_tracking_at else None,
+            'events':   events[-10:],   # últimos 10 para el timeline
+        })
+    return jsonify({'ok': False, 'error': 'No se pudo obtener información del carrier'}), 502
+
+
+@app.route('/shipments/refresh-all', methods=['POST'])
+@login_required
+def shipments_refresh_all():
+    """Actualiza todos los envíos activos — llamado por el scheduler o manualmente."""
+    import tracking as trk
+    updated = trk.refresh_all_active(app)
+    flash(f'Tracking actualizado: {updated} envío(s) sincronizados.', 'success')
+    return redirect(url_for('shipments_list'))
+
+
 # ── Clients (Empresas) ────────────────────────────────────────────────────────
 
 @app.route('/clients')
@@ -1390,6 +1447,32 @@ def server_error(e):
 def rate_limited(e):
     return render_template('errors/429.html'), 429
 
+
+# ── Auto-tracking scheduler (cada 4 horas) ────────────────────────────────────
+def _start_tracking_scheduler():
+    """Lanza un hilo en background que refresca envíos activos cada 4 horas."""
+    import threading, time, tracking as trk
+
+    def _loop():
+        # Primera corrida 60 s después de arrancar (da tiempo al DB de inicializarse)
+        time.sleep(60)
+        while True:
+            try:
+                if trk._API_KEY:
+                    n = trk.refresh_all_active(app)
+                    if n:
+                        app.logger.info("Tracking scheduler: %d envíos actualizados", n)
+            except Exception as e:
+                app.logger.exception("Tracking scheduler error: %s", e)
+            time.sleep(4 * 3600)   # cada 4 horas
+
+    t = threading.Thread(target=_loop, daemon=True, name="tracking-scheduler")
+    t.start()
+
+
+# Arrancar scheduler solo si no estamos en modo debug-reloader (evita doble instancia)
+if not os.environ.get('WERKZEUG_RUN_MAIN'):
+    _start_tracking_scheduler()
 
 if __name__ == '__main__':
     app.run(debug=os.environ.get('FLASK_DEBUG', '0') == '1', port=5050, host='0.0.0.0')

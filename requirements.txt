@@ -13,6 +13,7 @@ pyotp==2.9.0
 qrcode==8.0
 Pillow>=10.0.0
 filetype==1.2.0
+requests>=2.31.0       # AfterShip package tracking API
 
 # Producción (servidor WSGI robusto)
 waitress==3.0.1        # Windows (desarrollo local)

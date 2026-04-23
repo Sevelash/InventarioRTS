@@ -219,9 +219,28 @@ class Shipment(db.Model):
     actual_delivery = db.Column(db.Date)
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # ── AfterShip tracking ────────────────────────────────────────────────
+    aftership_slug      = db.Column(db.String(50),   nullable=True)   # carrier slug p.ej. 'fedex'
+    tracking_events     = db.Column(db.Text,          nullable=True)   # JSON con historial
+    last_tracking_at    = db.Column(db.DateTime,      nullable=True)   # última consulta
+    tracking_tag        = db.Column(db.String(30),    nullable=True)   # tag AfterShip (InTransit, etc.)
+    est_delivery_afship = db.Column(db.DateTime,      nullable=True)   # ETA de AfterShip
 
     CARRIER_CHOICES = ['DHL', 'FedEx', 'UPS', 'USPS', 'Estafeta', 'Otro']
     STATUS_CHOICES = ['pendiente', 'en_transito', 'en_aduana', 'entregado', 'devuelto']
+
+    # Mapa AfterShip tag → nuestro status interno
+    AFTERSHIP_STATUS_MAP = {
+        'Pending':          'pendiente',
+        'InfoReceived':     'pendiente',
+        'InTransit':        'en_transito',
+        'OutForDelivery':   'en_transito',
+        'AttemptFail':      'en_transito',
+        'Delivered':        'entregado',
+        'AvailableForPickup': 'en_transito',
+        'Exception':        'en_transito',
+        'Expired':          'en_transito',
+    }
 
     def __repr__(self):
         return f'<Shipment {self.carrier} {self.tracking_number}>'

@@ -10,6 +10,11 @@
   <a href="{{ url_for('shipment_edit', id=shipment.id) }}" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-pencil me-1"></i>Editar
   </a>
+  <!-- Botón rastrear ahora -->
+  <button class="btn btn-rts btn-sm" id="trackNowBtn"
+          onclick="trackNow({{ shipment.id }})">
+    <i class="bi bi-radar me-1"></i>Rastrear Ahora
+  </button>
 {% endblock %}
 
 {% block content %}
@@ -33,18 +38,40 @@
             <div style="font-size:11px;text-transform:uppercase;font-weight:700;color:var(--rts-gray);letter-spacing:.06em;">Número de Rastreo</div>
             <code style="font-size:18px;font-weight:700;color:var(--rts-navy);">{{ shipment.tracking_number }}</code>
           </div>
-          <div class="ms-auto">
-            <span class="badge bg-{{ SHIPMENT_STATUS_BADGES[shipment.status] }}" style="font-size:13px;padding:6px 14px;">
+          <div class="ms-auto d-flex flex-column align-items-end gap-1">
+            <span class="badge bg-{{ SHIPMENT_STATUS_BADGES[shipment.status] }}" style="font-size:13px;padding:6px 14px;" id="statusBadge">
               {{ SHIPMENT_STATUS_LABELS[shipment.status] }}
             </span>
+            {% if shipment.last_tracking_at %}
+            <span style="font-size:10.5px;color:var(--rts-gray);" id="lastUpdated">
+              <i class="bi bi-clock me-1"></i>Actualizado: {{ shipment.last_tracking_at.strftime('%d/%m/%Y %H:%M') }}
+            </span>
+            {% else %}
+            <span style="font-size:10.5px;color:var(--rts-gray);" id="lastUpdated">
+              <i class="bi bi-clock me-1"></i>Sin rastreo aún
+            </span>
+            {% endif %}
           </div>
         </div>
+
+        {% if shipment.est_delivery_afship %}
+        <div class="mt-2 p-2 rounded d-flex align-items-center gap-2"
+             style="background:#EBF5FB;border:1px solid #BDE0F4;font-size:13px;">
+          <i class="bi bi-calendar-check text-primary"></i>
+          <span>ETA según carrier: <strong>{{ shipment.est_delivery_afship.strftime('%d/%m/%Y') }}</strong></span>
+        </div>
+        {% endif %}
       </div>
     </div>
 
     <!-- Timeline de trazabilidad -->
     <div class="card mb-3">
-      <div class="card-header"><i class="bi bi-diagram-3 me-2"></i>Trazabilidad del Envío</div>
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-diagram-3 me-2"></i>Trazabilidad del Envío</span>
+        {% if shipment.tracking_tag %}
+        <span class="badge bg-info text-dark" style="font-size:11px;">{{ shipment.tracking_tag }}</span>
+        {% endif %}
+      </div>
       <div class="card-body">
 
         {% set step_order = ['pendiente', 'en_transito', 'en_aduana', 'entregado'] %}
@@ -91,15 +118,40 @@
         </div>
         {% endif %}
 
-        <!-- Detalle de pasos -->
-        <div class="shipment-timeline mt-3">
-          <div class="shipment-step {% if current_idx >= 0 %}done{% endif %}">
+        <!-- ── Timeline de eventos AfterShip ── -->
+        {% if shipment.tracking_events %}
+          {% set events = shipment.tracking_events | from_json %}
+          {% if events %}
+          <div class="mt-3">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--rts-gray);margin-bottom:10px;">
+              <i class="bi bi-list-ul me-1"></i>Historial del carrier
+            </div>
+            <div class="shipment-timeline" id="eventsTimeline">
+              {% for evt in events | reverse %}
+              <div class="shipment-step done" style="padding-left:14px;">
+                <strong style="font-size:13px;">{{ evt.message or evt.subtag_message or '—' }}</strong>
+                <div style="font-size:11.5px;color:var(--rts-gray);">
+                  {% if evt.location %}
+                    <i class="bi bi-geo-alt me-1"></i>{{ evt.location }}
+                  {% endif %}
+                  {% if evt.checkpoint_time %}
+                    · {{ evt.checkpoint_time[:16] | replace('T',' ') }}
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+        {% else %}
+        <!-- Timeline manual si no hay datos de AfterShip -->
+        <div class="shipment-timeline mt-3" id="eventsTimeline">
+          <div class="shipment-step done">
             <strong>Envío registrado</strong>
             <div class="text-muted" style="font-size:12px;">
               {{ shipment.created_at.strftime('%d/%m/%Y %H:%M') if shipment.created_at else '—' }}
             </div>
           </div>
-
           <div class="shipment-step {% if shipment.ship_date %}done{% elif shipment.status == 'pendiente' %}active{% endif %}">
             <strong>Paquete recolectado / enviado</strong>
             <div class="text-muted" style="font-size:12px;">
@@ -108,35 +160,21 @@
               {% else %}Pendiente de recolección{% endif %}
             </div>
           </div>
-
           <div class="shipment-step {% if shipment.status in ['en_transito','en_aduana','entregado','devuelto'] %}done{% endif %}">
             <strong>En tránsito</strong>
             <div class="text-muted" style="font-size:12px;">
               {% if shipment.destination %}Hacia: {{ shipment.destination }}{% endif %}
-              {% if shipment.estimated_delivery %} — Entrega estimada: {{ shipment.estimated_delivery | format_date }}{% endif %}
             </div>
           </div>
-
-          {% if shipment.status == 'en_aduana' or (shipment.status in ['entregado','devuelto'] and shipment.notes and 'aduana' in shipment.notes|lower) %}
-          <div class="shipment-step {% if shipment.status in ['entregado','devuelto'] %}done{% else %}active{% endif %}">
-            <strong>En proceso de aduana</strong>
-            <div class="text-muted" style="font-size:12px;">Revisión en aduana en curso</div>
-          </div>
-          {% endif %}
-
-          <div class="shipment-step {% if shipment.status == 'entregado' %}done{% elif shipment.status == 'devuelto' %}done{% endif %}">
-            <strong>
-              {% if shipment.status == 'entregado' %}Entregado exitosamente
-              {% elif shipment.status == 'devuelto' %}Devuelto al remitente
-              {% else %}Entrega pendiente{% endif %}
-            </strong>
+          <div class="shipment-step {% if shipment.status == 'entregado' %}done{% endif %}">
+            <strong>{% if shipment.status == 'entregado' %}Entregado exitosamente{% else %}Entrega pendiente{% endif %}</strong>
             <div class="text-muted" style="font-size:12px;">
               {% if shipment.actual_delivery %}{{ shipment.actual_delivery | format_date }}
-              {% elif shipment.recipient_name %}Para: {{ shipment.recipient_name }}
-              {% else %}—{% endif %}
+              {% elif shipment.recipient_name %}Para: {{ shipment.recipient_name }}{% endif %}
             </div>
           </div>
         </div>
+        {% endif %}
 
         {% if shipment.notes %}
         <div class="mt-3 p-3 rounded" style="background:var(--rts-bg);font-size:13px;">
@@ -146,21 +184,20 @@
       </div>
     </div>
 
-    <!-- Actualizar estado rápido -->
+    <!-- Actualizar estado manualmente -->
     <div class="card">
-      <div class="card-header"><i class="bi bi-arrow-repeat me-2"></i>Actualizar Estado</div>
+      <div class="card-header"><i class="bi bi-arrow-repeat me-2"></i>Actualizar Estado Manualmente</div>
       <div class="card-body">
         <form action="{{ url_for('shipment_edit', id=shipment.id) }}" method="post" class="row g-2 align-items-end">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <!-- Reenviar todos los campos actuales para no perderlos -->
-          <input type="hidden" name="carrier"          value="{{ shipment.carrier }}">
-          <input type="hidden" name="tracking_number"  value="{{ shipment.tracking_number }}">
-          <input type="hidden" name="origin"           value="{{ shipment.origin or '' }}">
-          <input type="hidden" name="destination"      value="{{ shipment.destination or '' }}">
-          <input type="hidden" name="recipient_name"   value="{{ shipment.recipient_name or '' }}">
-          <input type="hidden" name="ship_date"        value="{{ shipment.ship_date.strftime('%Y-%m-%d') if shipment.ship_date else '' }}">
+          <input type="hidden" name="carrier"            value="{{ shipment.carrier }}">
+          <input type="hidden" name="tracking_number"    value="{{ shipment.tracking_number }}">
+          <input type="hidden" name="origin"             value="{{ shipment.origin or '' }}">
+          <input type="hidden" name="destination"        value="{{ shipment.destination or '' }}">
+          <input type="hidden" name="recipient_name"     value="{{ shipment.recipient_name or '' }}">
+          <input type="hidden" name="ship_date"          value="{{ shipment.ship_date.strftime('%Y-%m-%d') if shipment.ship_date else '' }}">
           <input type="hidden" name="estimated_delivery" value="{{ shipment.estimated_delivery.strftime('%Y-%m-%d') if shipment.estimated_delivery else '' }}">
-          <input type="hidden" name="notes"            value="{{ shipment.notes or '' }}">
+          <input type="hidden" name="notes"              value="{{ shipment.notes or '' }}">
 
           <div class="col-sm-4">
             <label class="form-label">Nuevo Estado</label>
@@ -177,7 +214,7 @@
           </div>
           <div class="col-auto">
             <button type="submit" class="btn btn-rts btn-sm">
-              <i class="bi bi-check-lg me-1"></i>Actualizar
+              <i class="bi bi-check-lg me-1"></i>Guardar
             </button>
           </div>
         </form>
@@ -233,7 +270,14 @@
         </div>
         <div class="d-flex justify-content-between mb-2">
           <span class="text-muted">Entrega estimada</span>
-          <span>{{ shipment.estimated_delivery | format_date }}</span>
+          <span>
+            {% if shipment.est_delivery_afship %}
+              <span class="text-primary fw-semibold">{{ shipment.est_delivery_afship.strftime('%d/%m/%Y') }}</span>
+              <span style="font-size:10px;color:var(--rts-gray);"> (carrier)</span>
+            {% elif shipment.estimated_delivery %}
+              {{ shipment.estimated_delivery | format_date }}
+            {% else %}—{% endif %}
+          </span>
         </div>
         <div class="d-flex justify-content-between">
           <span class="text-muted">Entrega real</span>
@@ -242,22 +286,120 @@
       </div>
     </div>
 
-    <!-- Enlace DHL -->
-    {% if shipment.carrier == 'DHL' %}
+    <!-- Copiar tracking / link oficial -->
     <div class="card">
       <div class="card-body text-center" style="font-size:13px;">
-        <div class="dhl-logo mb-2" style="font-size:20px;">DHL</div>
-        <p class="text-muted mb-2">Rastrear en el sitio oficial de DHL con el número:</p>
+        {% if shipment.carrier == 'DHL' %}
+          <div class="dhl-logo mb-2" style="font-size:20px;">DHL</div>
+        {% else %}
+          <div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:var(--rts-navy);" class="mb-2">
+            {{ shipment.carrier }}
+          </div>
+        {% endif %}
         <code style="color:var(--rts-navy);font-size:13px;">{{ shipment.tracking_number }}</code>
-        <div class="mt-3">
-          <span class="btn btn-sm btn-outline-secondary w-100" onclick="navigator.clipboard.writeText('{{ shipment.tracking_number }}');this.textContent='¡Copiado!'">
+        <div class="mt-3 d-flex flex-column gap-2">
+          <button class="btn btn-sm btn-outline-secondary w-100"
+                  onclick="navigator.clipboard.writeText('{{ shipment.tracking_number }}');this.innerHTML='<i class=\'bi bi-check me-1\'></i>¡Copiado!'">
             <i class="bi bi-clipboard me-1"></i>Copiar Tracking #
-          </span>
+          </button>
+          {% set carrier_urls = {
+            'DHL':      'https://www.dhl.com/mx-es/home/tracking/tracking-express.html?submit=1&tracking-id=',
+            'FedEx':    'https://www.fedex.com/fedextrack/?trknbr=',
+            'UPS':      'https://www.ups.com/track?tracknum=',
+            'Estafeta': 'https://rastreo.estafeta.com/Home/SearchByGet?wayBillType=1&wayBill=',
+            'USPS':     'https://tools.usps.com/go/TrackConfirmAction?tLabels=',
+          } %}
+          {% if shipment.carrier in carrier_urls %}
+          <a href="{{ carrier_urls[shipment.carrier] }}{{ shipment.tracking_number }}"
+             target="_blank" rel="noopener"
+             class="btn btn-sm btn-outline-primary w-100">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Ver en {{ shipment.carrier }}
+          </a>
+          {% endif %}
         </div>
       </div>
     </div>
-    {% endif %}
 
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function trackNow(id) {
+  const btn = document.getElementById('trackNowBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Rastreando…';
+
+  try {
+    const r = await fetch(`/shipments/${id}/track`, { method: 'POST' });
+    const data = await r.json();
+
+    if (data.ok) {
+      // Actualizar badge de status
+      const statusMap = {
+        'pendiente':   ['Pendiente',  'secondary'],
+        'en_transito': ['En Tránsito','primary'],
+        'en_aduana':   ['En Aduana',  'warning'],
+        'entregado':   ['Entregado',  'success'],
+        'devuelto':    ['Devuelto',   'dark'],
+      };
+      const badge = document.getElementById('statusBadge');
+      if (badge && data.status && statusMap[data.status]) {
+        const [label, color] = statusMap[data.status];
+        badge.className = `badge bg-${color}`;
+        badge.style.fontSize = '13px';
+        badge.style.padding = '6px 14px';
+        badge.textContent = label;
+      }
+
+      // Actualizar timestamp
+      const lu = document.getElementById('lastUpdated');
+      if (lu && data.updated) {
+        lu.innerHTML = `<i class="bi bi-clock me-1"></i>Actualizado: ${data.updated}`;
+      }
+
+      // Actualizar timeline de eventos
+      if (data.events && data.events.length > 0) {
+        const timeline = document.getElementById('eventsTimeline');
+        if (timeline) {
+          const eventsRev = [...data.events].reverse();
+          timeline.innerHTML = eventsRev.map(e => `
+            <div class="shipment-step done" style="padding-left:14px;">
+              <strong style="font-size:13px;">${e.message || e.subtag_message || '—'}</strong>
+              <div style="font-size:11.5px;color:var(--rts-gray);">
+                ${e.location ? `<i class="bi bi-geo-alt me-1"></i>${e.location} · ` : ''}
+                ${e.checkpoint_time ? e.checkpoint_time.slice(0,16).replace('T',' ') : ''}
+              </div>
+            </div>
+          `).join('');
+        }
+      }
+
+      // Toast de éxito
+      showToast(`✓ Tracking actualizado — ${data.tag || data.status}`, 'success');
+
+      // Recargar página en 1.5 s para actualizar la barra de progreso
+      setTimeout(() => location.reload(), 1500);
+
+    } else {
+      showToast('Error: ' + (data.error || 'No se pudo rastrear'), 'danger');
+    }
+  } catch(e) {
+    showToast('Error de conexión', 'danger');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-radar me-1"></i>Rastrear Ahora';
+  }
+}
+
+function showToast(msg, type) {
+  const t = document.createElement('div');
+  t.className = `alert alert-${type} position-fixed top-0 start-50 translate-middle-x mt-3 shadow`;
+  t.style.cssText = 'z-index:9999;font-size:13px;padding:8px 18px;border-radius:8px;min-width:260px;text-align:center;';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+</script>
 {% endblock %}
