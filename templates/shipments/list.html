@@ -51,6 +51,7 @@
         <thead>
           <tr>
             <th class="ps-3">Carrier</th>
+            <th>Dirección</th>
             <th>Tracking #</th>
             <th>Activo</th>
             <th>Origen</th>
@@ -70,6 +71,17 @@
                 <span class="dhl-logo">DHL</span>
               {% else %}
                 <span class="fw-bold" style="font-size:13px;">{{ s.carrier }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if s.direction == 'inbound' %}
+                <span class="badge bg-warning text-dark" title="Devolución — Remotie → RTS">
+                  <i class="bi bi-arrow-left me-1"></i>Inbound
+                </span>
+              {% else %}
+                <span class="badge bg-primary" title="Envío — RTS → Remotie">
+                  <i class="bi bi-arrow-right me-1"></i>Outbound
+                </span>
               {% endif %}
             </td>
             <td>

@@ -226,6 +226,9 @@ class Shipment(db.Model):
     tracking_tag        = db.Column(db.String(30),    nullable=True)   # tag AfterShip (InTransit, etc.)
     est_delivery_afship = db.Column(db.DateTime,      nullable=True)   # ETA de AfterShip
 
+    # Direction: outbound = RTS → Remotie (we send); inbound = Remotie → RTS (they return)
+    direction = db.Column(db.String(10), nullable=False, default='outbound')
+
     CARRIER_CHOICES = ['DHL', 'FedEx', 'UPS', 'USPS', 'Estafeta', 'Otro']
     STATUS_CHOICES = ['pendiente', 'en_transito', 'en_aduana', 'entregado', 'devuelto']
 

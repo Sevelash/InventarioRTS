@@ -855,6 +855,7 @@ def shipment_new(asset_id=None):
     if request.method == 'POST':
         shipment = Shipment(
             asset_id=int(request.form.get('asset_id')),
+            direction=request.form.get('direction', 'outbound'),
             carrier=request.form.get('carrier', 'DHL').strip(),
             tracking_number=request.form.get('tracking_number', '').strip(),
             origin=request.form.get('origin', '').strip() or None,
@@ -870,11 +871,20 @@ def shipment_new(asset_id=None):
                    entity_name=f'{shipment.carrier} #{shipment.tracking_number}',
                    details=f'Carrier: {shipment.carrier} | Tracking: {shipment.tracking_number} | Destino: {shipment.destination}')
         db.session.commit()
+        # Auto-register in AfterShip
+        import tracking as trk
+        if trk._API_KEY and shipment.tracking_number:
+            try:
+                trk.refresh_shipment(shipment)
+                db.session.commit()
+            except Exception:
+                pass
         flash(f'Envío {shipment.carrier} #{shipment.tracking_number} registrado.', 'success')
         return redirect(url_for('shipment_detail', id=shipment.id))
     return render_template('shipments/form.html',
                            foraneo_assets=foraneo_assets, shipment=None,
-                           pre_asset=str(pre_asset) if pre_asset else '', form={})
+                           pre_asset=str(pre_asset) if pre_asset else '',
+                           pre_direction='outbound', pre_origin='', form={})
 
 
 @app.route('/shipments/<int:id>')
@@ -959,6 +969,99 @@ def shipment_track(id):
             'events':   events[-10:],   # últimos 10 para el timeline
         })
     return jsonify({'ok': False, 'error': 'No se pudo obtener información del carrier'}), 502
+
+
+@app.route('/shipments/return/<int:asset_id>', methods=['GET', 'POST'])
+@login_required
+def shipment_return(asset_id):
+    """Create an inbound (return) shipment for an asset."""
+    asset = Asset.query.get_or_404(asset_id)
+    ca = asset.current_assignment  # to get employee info
+    foraneo_assets = Asset.query.filter(Asset.location_type.in_(['foraneo', 'hibrido'])).order_by(Asset.name).all()
+
+    if request.method == 'POST':
+        shipment = Shipment(
+            asset_id=asset_id,
+            direction='inbound',
+            carrier=request.form.get('carrier', 'DHL').strip(),
+            tracking_number=request.form.get('tracking_number', '').strip(),
+            origin=request.form.get('origin', '').strip() or None,
+            destination=request.form.get('destination', '').strip() or None,
+            recipient_name=request.form.get('recipient_name', '').strip() or None,
+            status=request.form.get('status', 'pendiente'),
+            ship_date=parse_date(request.form.get('ship_date')),
+            estimated_delivery=parse_date(request.form.get('estimated_delivery')),
+            notes=request.form.get('notes', '').strip() or None,
+        )
+        db.session.add(shipment)
+        log_action('create', 'shipment', entity_name=f'RETURN {shipment.carrier} #{shipment.tracking_number}',
+                   details=f'Devolución de {asset.asset_tag} | Carrier: {shipment.carrier}')
+        db.session.commit()
+
+        # Auto-register in AfterShip if API key is set
+        import tracking as trk
+        if trk._API_KEY and shipment.tracking_number:
+            try:
+                trk.refresh_shipment(shipment)
+                db.session.commit()
+            except Exception:
+                pass
+
+        flash(f'Devolución registrada: {shipment.carrier} #{shipment.tracking_number}', 'success')
+        return redirect(url_for('shipment_detail', id=shipment.id))
+
+    # Pre-fill: origin = employee location, destination = RTS office
+    pre_origin = ''
+    if ca and ca.employee:
+        pre_origin = ca.employee.department or ''
+
+    return render_template('shipments/form.html',
+                           foraneo_assets=foraneo_assets,
+                           shipment=None,
+                           pre_asset=str(asset_id),
+                           pre_direction='inbound',
+                           pre_origin=pre_origin,
+                           form={})
+
+
+@app.route('/webhooks/aftership', methods=['POST'])
+@csrf.exempt
+def aftership_webhook():
+    """AfterShip sends real-time status updates here."""
+    import tracking as trk, json as _json
+    try:
+        payload = request.get_json(force=True) or {}
+        tracking_data = payload.get('data', {}).get('tracking', payload.get('data', {}))
+
+        if not tracking_data:
+            return jsonify({'ok': True})
+
+        tracking_number = tracking_data.get('tracking_number')
+        if not tracking_number:
+            return jsonify({'ok': True})
+
+        # Find matching shipment
+        shipment = Shipment.query.filter_by(tracking_number=tracking_number).first()
+        if shipment:
+            shipment.tracking_tag     = tracking_data.get('tag')
+            shipment.last_tracking_at = datetime.utcnow()
+
+            tag = tracking_data.get('tag', '')
+            new_status = Shipment.AFTERSHIP_STATUS_MAP.get(tag)
+            if new_status:
+                shipment.status = new_status
+
+            # Store events
+            events = tracking_data.get('events', tracking_data.get('checkpoints', []))[-20:]
+            normalized = [{'message': e.get('message', ''), 'location': e.get('location', ''), 'checkpoint_time': e.get('occurred_at', e.get('checkpoint_time', ''))} for e in events]
+            shipment.tracking_events = _json.dumps(normalized, ensure_ascii=False)
+
+            db.session.commit()
+            app.logger.info("Webhook: shipment %s updated to %s", shipment.id, shipment.status)
+    except Exception as e:
+        app.logger.exception("Webhook error: %s", e)
+
+    return jsonify({'ok': True})
 
 
 @app.route('/shipments/refresh-all', methods=['POST'])

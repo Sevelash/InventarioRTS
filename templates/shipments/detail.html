@@ -39,6 +39,15 @@
             <code style="font-size:18px;font-weight:700;color:var(--rts-navy);">{{ shipment.tracking_number }}</code>
           </div>
           <div class="ms-auto d-flex flex-column align-items-end gap-1">
+            {% if shipment.direction == 'inbound' %}
+            <span class="badge bg-warning text-dark" style="font-size:12px;padding:4px 10px;">
+              <i class="bi bi-arrow-return-left me-1"></i>Devolución (Inbound)
+            </span>
+            {% else %}
+            <span class="badge bg-primary" style="font-size:12px;padding:4px 10px;">
+              <i class="bi bi-arrow-right me-1"></i>Envío (Outbound)
+            </span>
+            {% endif %}
             <span class="badge bg-{{ SHIPMENT_STATUS_BADGES[shipment.status] }}" style="font-size:13px;padding:6px 14px;" id="statusBadge">
               {{ SHIPMENT_STATUS_LABELS[shipment.status] }}
             </span>

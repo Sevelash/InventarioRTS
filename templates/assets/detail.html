@@ -25,6 +25,9 @@
   <a href="{{ url_for('shipment_new', asset_id=asset.id) }}" class="btn btn-sm btn-navy">
     <i class="bi bi-truck me-1"></i>Nuevo Envío
   </a>
+  <a href="{{ url_for('shipment_return', asset_id=asset.id) }}" class="btn btn-sm btn-outline-warning">
+    <i class="bi bi-arrow-return-left me-1"></i>Solicitar Devolución
+  </a>
   {% endif %}
 {% endblock %}
 

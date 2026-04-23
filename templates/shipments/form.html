@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 
-{% block title %}{{ 'Editar' if shipment else 'Nuevo' }} Envío - RTS{% endblock %}
-{% block page_title %}{{ 'Editar Envío' if shipment else 'Registrar Nuevo Envío' }}{% endblock %}
+{% set _direction = shipment.direction if shipment else (pre_direction or 'outbound') %}
+{% block title %}{{ 'Editar' if shipment else ('Devolución' if _direction == 'inbound' else 'Nuevo') }} Envío - RTS{% endblock %}
+{% block page_title %}{{ 'Editar Envío' if shipment else ('Registrar Devolución (Inbound)' if _direction == 'inbound' else 'Registrar Nuevo Envío') }}{% endblock %}
 
 {% block topbar_actions %}
   <a href="{{ url_for('shipments_list') }}" class="btn btn-outline-secondary btn-sm">
@@ -14,12 +15,30 @@
   <div class="col-lg-8">
     <form method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="direction" value="{{ _direction }}">
+
+      <!-- Direction indicator -->
+      {% if _direction == 'inbound' %}
+      <div class="alert alert-warning d-flex align-items-center gap-2 mb-3 py-2">
+        <i class="bi bi-arrow-return-left fs-5"></i>
+        <div>
+          <strong>Devolución (Inbound)</strong> — El Remotie devuelve el equipo a RTS.
+        </div>
+      </div>
+      {% else %}
+      <div class="alert alert-primary d-flex align-items-center gap-2 mb-3 py-2">
+        <i class="bi bi-arrow-right-circle fs-5"></i>
+        <div>
+          <strong>Envío (Outbound)</strong> — RTS envía el equipo al Remotie.
+        </div>
+      </div>
+      {% endif %}
 
       <!-- Activo & Carrier -->
-      <div class="card mb-3">
-        <div class="card-header">
+      <div class="card mb-3 {% if _direction == 'inbound' %}border-warning{% endif %}">
+        <div class="card-header {% if _direction == 'inbound' %}bg-warning bg-opacity-10{% endif %}">
           <span class="dhl-logo me-2">{{ shipment.carrier if shipment else 'DHL' }}</span>
-          Información del Envío
+          {% if _direction == 'inbound' %}<i class="bi bi-arrow-return-left me-1 text-warning"></i>Devolución{% else %}Información del Envío{% endif %}
         </div>
         <div class="card-body">
           <div class="row g-3">
@@ -88,7 +107,7 @@
             <div class="col-sm-6">
               <label class="form-label">Origen</label>
               <input type="text" name="origin" class="form-control"
-                     value="{{ form.get('origin', shipment.origin if shipment else '') }}"
+                     value="{{ form.get('origin', shipment.origin if shipment else (pre_origin or '')) }}"
                      placeholder="Ej. San Juan, PR · Oficina Central RTS">
             </div>
             <div class="col-sm-6">
@@ -143,8 +162,8 @@
       </div>
 
       <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-navy" {% if not foraneo_assets and not shipment %}disabled{% endif %}>
-          <i class="bi bi-check-lg me-1"></i>{{ 'Guardar Cambios' if shipment else 'Registrar Envío' }}
+        <button type="submit" class="btn {% if _direction == 'inbound' %}btn-warning{% else %}btn-navy{% endif %}" {% if not foraneo_assets and not shipment %}disabled{% endif %}>
+          <i class="bi bi-check-lg me-1"></i>{{ 'Guardar Cambios' if shipment else ('Registrar Devolución' if _direction == 'inbound' else 'Registrar Envío') }}
         </button>
         <a href="{{ url_for('shipments_list') }}" class="btn btn-outline-secondary">Cancelar</a>
       </div>
