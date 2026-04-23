@@ -12,8 +12,8 @@ import requests
 
 log = logging.getLogger(__name__)
 
-# AfterShip API v4
-_BASE     = "https://api.aftership.com/v4"
+# AfterShip API 2024-04 (nueva versión — header: as-api-key)
+_BASE     = "https://api.aftership.com/tracking/2024-04"
 _API_KEY  = os.environ.get("AFTERSHIP_API_KEY", "")
 
 # Carrier slug map (nombre que usamos → slug de AfterShip)
@@ -30,7 +30,7 @@ CARRIER_SLUGS = {
 
 def _headers():
     return {
-        "aftership-api-key": _API_KEY,
+        "as-api-key": _API_KEY,          # nuevo header AfterShip 2024+
         "Content-Type": "application/json",
     }
 
@@ -51,19 +51,19 @@ def create_tracking(tracking_number: str, carrier: str, title: str = "") -> dict
         return {}
 
     slug = _slug_for(carrier)
-    payload = {"tracking": {"tracking_number": tracking_number}}
+    payload = {"tracking_number": tracking_number}
     if slug:
-        payload["tracking"]["slug"] = slug
+        payload["slug"] = slug
     if title:
-        payload["tracking"]["title"] = title
+        payload["title"] = title
 
     try:
         r = requests.post(f"{_BASE}/trackings", json=payload, headers=_headers(), timeout=10)
         data = r.json()
         if r.status_code in (200, 201):
-            return data.get("data", {}).get("tracking", {})
-        # 4003 = ya existe → lo buscamos directamente
-        if data.get("meta", {}).get("code") == 4003:
+            return data.get("data", {})
+        # ya existe → lo buscamos directamente
+        if r.status_code == 409:
             return get_tracking(tracking_number, carrier)
         log.error("AfterShip create error %s: %s", r.status_code, data)
     except Exception as e:
@@ -79,15 +79,22 @@ def get_tracking(tracking_number: str, carrier: str) -> dict:
     if not _API_KEY:
         return {}
 
-    slug = _slug_for(carrier) or "auto"
+    slug = _slug_for(carrier)
     try:
+        # Buscar por tracking number (AfterShip 2024 permite query params)
+        params = {"tracking_numbers": tracking_number}
+        if slug:
+            params["slug"] = slug
         r = requests.get(
-            f"{_BASE}/trackings/{slug}/{tracking_number}",
+            f"{_BASE}/trackings",
             headers=_headers(),
+            params=params,
             timeout=10,
         )
         if r.status_code == 200:
-            return r.json().get("data", {}).get("tracking", {})
+            trackings = r.json().get("data", {}).get("trackings", [])
+            if trackings:
+                return trackings[0]
         log.error("AfterShip get error %s: %s", r.status_code, r.text[:200])
     except Exception as e:
         log.exception("AfterShip get_tracking failed: %s", e)
@@ -119,43 +126,52 @@ def refresh_shipment(shipment) -> bool:
     if not tracking:
         return False
 
-    # Guardar slug real
-    shipment.aftership_slug   = tracking.get("slug", shipment.aftership_slug)
-    shipment.tracking_tag     = tracking.get("tag")
+    # Guardar slug real (nueva API usa "slug" en el objeto)
+    shipment.aftership_slug   = tracking.get("slug") or tracking.get("courier_code") or shipment.aftership_slug
+    # Tag de status (nueva API: "tag" o dentro de "current_event_detail")
+    tag = tracking.get("tag") or tracking.get("status", {}).get("tag", "") if isinstance(tracking.get("status"), dict) else tracking.get("tag", "")
+    shipment.tracking_tag     = tag
     shipment.last_tracking_at = datetime.utcnow()
 
-    # ETA
-    eta_str = tracking.get("expected_delivery")
+    # ETA — nueva API usa "estimated_delivery_date"
+    eta_str = tracking.get("estimated_delivery_date") or tracking.get("expected_delivery")
     if eta_str:
         try:
-            shipment.est_delivery_afship = datetime.fromisoformat(eta_str.replace("Z", "+00:00"))
+            shipment.est_delivery_afship = datetime.fromisoformat(str(eta_str).replace("Z", "+00:00"))
         except Exception:
             pass
 
     # Actualizar entrega real si ya llegó
-    if tracking.get("tag") == "Delivered":
-        events = tracking.get("checkpoints", [])
+    if tag == "Delivered":
+        events = tracking.get("events", tracking.get("checkpoints", []))
         if events:
             last_evt = events[-1]
-            ts = last_evt.get("checkpoint_time") or last_evt.get("created_at")
+            ts = last_evt.get("occurred_at") or last_evt.get("checkpoint_time") or last_evt.get("created_at")
             if ts:
                 try:
                     shipment.actual_delivery = datetime.fromisoformat(
-                        ts.replace("Z", "+00:00")
+                        str(ts).replace("Z", "+00:00")
                     ).date()
                 except Exception:
                     pass
 
     # Mapear status
-    tag = tracking.get("tag", "")
     from models import Shipment
     new_status = Shipment.AFTERSHIP_STATUS_MAP.get(tag)
     if new_status:
         shipment.status = new_status
 
-    # Guardar eventos (últimos 20)
-    checkpoints = tracking.get("checkpoints", [])[-20:]
-    shipment.tracking_events = json.dumps(checkpoints, ensure_ascii=False)
+    # Guardar eventos — nueva API usa "events", vieja usa "checkpoints"
+    events = tracking.get("events", tracking.get("checkpoints", []))[-20:]
+    # Normalizar campos para el template
+    normalized = []
+    for e in events:
+        normalized.append({
+            "message":         e.get("message") or e.get("description") or e.get("subtag_message", ""),
+            "location":        e.get("location") or e.get("city") or "",
+            "checkpoint_time": e.get("occurred_at") or e.get("checkpoint_time") or e.get("created_at") or "",
+        })
+    shipment.tracking_events = json.dumps(normalized, ensure_ascii=False)
 
     return True
 
