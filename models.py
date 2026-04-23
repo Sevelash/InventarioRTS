@@ -130,7 +130,10 @@ class Asset(db.Model):
     # En Sitio vs Foráneo
     location_type = db.Column(db.String(20), nullable=False, default='en_sitio')  # en_sitio | hibrido | foraneo
     location = db.Column(db.String(150))
-    # Specs
+    # Tipo de equipo
+    asset_type   = db.Column(db.String(30), nullable=False, default='laptop')
+    # laptop | desktop | monitor | headset | teclado | mouse | tablet | impresora | camara | otro
+    # Specs (aplica solo a laptop/desktop/tablet)
     ram          = db.Column(db.String(50))
     os_version   = db.Column(db.String(100))
     cpu          = db.Column(db.String(150))
@@ -150,6 +153,21 @@ class Asset(db.Model):
                                 order_by='Shipment.created_at.desc()')
 
     STATUS_CHOICES = ['available', 'in_use', 'maintenance', 'retired', 'disposed']
+
+    ASSET_TYPE_CHOICES = [
+        ('laptop',     'Laptop / Notebook'),
+        ('desktop',    'Desktop / PC'),
+        ('monitor',    'Monitor / Pantalla'),
+        ('tablet',     'Tablet / iPad'),
+        ('headset',    'Headset / Audífonos'),
+        ('teclado',    'Teclado'),
+        ('mouse',      'Mouse'),
+        ('impresora',  'Impresora'),
+        ('camara',     'Cámara / Webcam'),
+        ('otro',       'Otro'),
+    ]
+    # Asset types that have computer specs (RAM, CPU, OS)
+    SPEC_TYPES = {'laptop', 'desktop', 'tablet'}
 
     @property
     def current_assignment(self):

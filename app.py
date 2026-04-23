@@ -493,10 +493,12 @@ def asset_new():
             flash(f'El Asset Tag "{asset_tag}" ya existe.', 'danger')
             return render_template('assets/form.html', categories=categories,
                                    clients=clients, asset=None,
+                                   asset_type_choices=Asset.ASSET_TYPE_CHOICES,
                                    form=request.form, return_url=return_url)
         asset = Asset(
             name=request.form.get('name', '').strip(),
             asset_tag=asset_tag,
+            asset_type=request.form.get('asset_type', 'laptop'),
             serial_number=request.form.get('serial_number', '').strip() or None,
             manufacturer=request.form.get('manufacturer', '').strip() or None,
             model=request.form.get('model', '').strip() or None,
@@ -522,7 +524,9 @@ def asset_new():
         flash(f'Activo "{asset.name}" creado correctamente.', 'success')
         return redirect(return_url)
     return render_template('assets/form.html', categories=categories,
-                           clients=clients, asset=None, form={}, return_url=return_url)
+                           clients=clients, asset=None,
+                           asset_type_choices=Asset.ASSET_TYPE_CHOICES,
+                           form={}, return_url=return_url)
 
 
 @app.route('/assets/<int:id>')
@@ -554,6 +558,7 @@ def asset_edit(id):
             flash(f'El Asset Tag "{new_tag}" ya existe en otro activo.', 'danger')
             return render_template('assets/form.html', categories=categories,
                                    clients=clients, asset=asset,
+                                   asset_type_choices=Asset.ASSET_TYPE_CHOICES,
                                    form=request.form, return_url=return_url)
         changes = []
         if asset.name != request.form.get('name', '').strip():
@@ -568,6 +573,7 @@ def asset_edit(id):
 
         asset.name             = request.form.get('name', '').strip()
         asset.asset_tag        = new_tag
+        asset.asset_type       = request.form.get('asset_type', asset.asset_type or 'laptop')
         asset.serial_number    = request.form.get('serial_number', '').strip() or None
         asset.manufacturer     = request.form.get('manufacturer', '').strip() or None
         asset.model            = request.form.get('model', '').strip() or None
@@ -591,7 +597,9 @@ def asset_edit(id):
         flash(f'Activo "{asset.name}" actualizado.', 'success')
         return redirect(return_url)
     return render_template('assets/form.html', categories=categories,
-                           clients=clients, asset=asset, form={}, return_url=return_url)
+                           clients=clients, asset=asset,
+                           asset_type_choices=Asset.ASSET_TYPE_CHOICES,
+                           form={}, return_url=return_url)
 
 
 @app.route('/assets/<int:id>/delete', methods=['POST'])

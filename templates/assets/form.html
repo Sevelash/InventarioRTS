@@ -17,7 +17,35 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="return_url" value="{{ return_url }}">
 
-      <!-- ① Identificación ─────────────────────────────── -->
+      <!-- ① Tipo de Activo ─────────────────────────────── -->
+      {% set cur_type = form.get('asset_type', asset.asset_type if asset else 'laptop') %}
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-grid me-2"></i>Tipo de Activo</div>
+        <div class="card-body">
+          <div class="row g-2" id="asset-type-grid">
+            {% set type_icons = {
+              'laptop': 'bi-laptop', 'desktop': 'bi-pc-display', 'monitor': 'bi-display',
+              'tablet': 'bi-tablet', 'headset': 'bi-headset', 'teclado': 'bi-keyboard',
+              'mouse': 'bi-mouse', 'impresora': 'bi-printer', 'camara': 'bi-camera-video',
+              'otro': 'bi-box-seam'
+            } %}
+            {% for val, label in asset_type_choices %}
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+              <input type="radio" class="btn-check" name="asset_type" id="at_{{ val }}"
+                     value="{{ val }}" autocomplete="off"
+                     {% if cur_type == val %}checked{% endif %}>
+              <label class="btn btn-outline-secondary w-100 py-2 px-1 text-center asset-type-btn"
+                     for="at_{{ val }}" style="font-size:12px;min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+                <i class="bi {{ type_icons.get(val, 'bi-box-seam') }}" style="font-size:20px;"></i>
+                {{ label.split(' / ')[0] }}
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- ② Identificación ─────────────────────────────── -->
       <div class="card mb-3">
         <div class="card-header"><i class="bi bi-upc me-2"></i>Identificación</div>
         <div class="card-body">
@@ -94,7 +122,7 @@
         </div>
       </div>
 
-      <!-- ② Características del equipo ────────────────── -->
+      <!-- ③ Características del equipo ────────────────── -->
       <div class="card mb-3">
         <div class="card-header"><i class="bi bi-cpu me-2"></i>Características del Equipo</div>
         <div class="card-body">
@@ -104,31 +132,32 @@
               <label class="form-label">Fabricante</label>
               <input type="text" name="manufacturer" class="form-control"
                      value="{{ form.get('manufacturer', asset.manufacturer if asset else '') }}"
-                     placeholder="Ej. Dell, Apple, HP">
+                     placeholder="Ej. Dell, Apple, HP, Logitech">
             </div>
 
             <div class="col-sm-4">
               <label class="form-label">Modelo</label>
               <input type="text" name="model" class="form-control"
                      value="{{ form.get('model', asset.model if asset else '') }}"
-                     placeholder="Ej. XPS 15 9530">
+                     placeholder="Ej. XPS 15 9530, H800">
             </div>
 
-            <div class="col-sm-4">
+            <!-- Campos solo para laptop / desktop / tablet -->
+            <div class="col-sm-4 spec-field">
               <label class="form-label">RAM</label>
               <input type="text" name="ram" class="form-control"
                      value="{{ form.get('ram', asset.ram if asset else '') }}"
                      placeholder="Ej. 16 GB DDR5">
             </div>
 
-            <div class="col-sm-6">
+            <div class="col-sm-6 spec-field">
               <label class="form-label">Procesador (CPU)</label>
               <input type="text" name="cpu" class="form-control"
                      value="{{ form.get('cpu', asset.cpu if asset else '') }}"
                      placeholder="Ej. Intel Core i7-1365U">
             </div>
 
-            <div class="col-sm-6">
+            <div class="col-sm-6 spec-field">
               <label class="form-label">Sistema Operativo</label>
               <input type="text" name="os_version" class="form-control"
                      value="{{ form.get('os_version', asset.os_version if asset else '') }}"
@@ -250,12 +279,44 @@
 
 {% block scripts %}
 <script>
+  // ── Location type toggle ──────────────────────────────────
   document.querySelectorAll('input[name="location_type"]').forEach(r => {
     r.addEventListener('change', () => {
       const show = document.getElementById('lt_foraneo').checked ||
                    document.getElementById('lt_hibrido').checked;
       document.getElementById('loc-help-foraneo').style.display = show ? '' : 'none';
     });
+  });
+
+  // ── Asset type: show/hide spec fields ────────────────────
+  const SPEC_TYPES = new Set(['laptop', 'desktop', 'tablet']);
+
+  function updateSpecFields() {
+    const selected = document.querySelector('input[name="asset_type"]:checked');
+    const isSpec   = selected && SPEC_TYPES.has(selected.value);
+    document.querySelectorAll('.spec-field').forEach(el => {
+      el.style.display = isSpec ? '' : 'none';
+    });
+  }
+
+  document.querySelectorAll('input[name="asset_type"]').forEach(r => {
+    r.addEventListener('change', updateSpecFields);
+  });
+
+  // Run on page load
+  updateSpecFields();
+
+  // Highlight selected type button
+  document.querySelectorAll('input[name="asset_type"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.querySelectorAll('.asset-type-btn').forEach(b => b.classList.remove('btn-primary','text-white'));
+      const lbl = document.querySelector(`label[for="${r.id}"]`);
+      if (r.checked && lbl) { lbl.classList.add('btn-primary','text-white'); lbl.classList.remove('btn-outline-secondary'); }
+    });
+    if (r.checked) {
+      const lbl = document.querySelector(`label[for="${r.id}"]`);
+      if (lbl) { lbl.classList.add('btn-primary','text-white'); lbl.classList.remove('btn-outline-secondary'); }
+    }
   });
 </script>
 {% endblock %}
