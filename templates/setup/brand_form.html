@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}{{ 'Editar' if brand else 'Nueva' }} Marca — RTS{% endblock %}
+{% block page_title %}{{ 'Editar Marca' if brand else 'Nueva Marca' }}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('brands_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([('Configuración', url_for('setup_index')), ('Marcas', url_for('brands_list')), (('Editar: ' ~ brand.name) if brand else 'Nueva', none)]) }}
+
+<div class="row justify-content-center">
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="row g-3">
+
+            <div class="col-12">
+              <label class="form-label">Nombre <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" required maxlength="100"
+                     value="{{ form.get('name', brand.name if brand else '') }}"
+                     placeholder="Ej. Dell, Apple, Logitech">
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Descripción</label>
+              <input type="text" name="description" class="form-control" maxlength="300"
+                     value="{{ form.get('description', brand.description if brand else '') }}"
+                     placeholder="Descripción corta (opcional)">
+            </div>
+
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="active" id="active"
+                       {% if form.get('active', 'on' if not brand or brand.active else '') == 'on' or (not brand and not form) %}checked{% endif %}>
+                <label class="form-check-label" for="active">Marca activa</label>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-rts px-4">
+              <i class="bi bi-check-lg me-1"></i>{{ 'Guardar Cambios' if brand else 'Crear Marca' }}
+            </button>
+            <a href="{{ url_for('brands_list') }}" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-left me-1"></i>Cancelar
+            </a>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

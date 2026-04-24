@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}Configuración Inicial — RTS{% endblock %}
+{% block page_title %}Configuración Inicial{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([('Configuración', none)]) }}
+
+<div class="row g-3 mb-4">
+
+  <!-- Proveedores -->
+  <div class="col-sm-6 col-lg-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div style="width:52px;height:52px;border-radius:12px;background:var(--rts-navy);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="bi bi-truck" style="font-size:22px;color:#fff;"></i>
+        </div>
+        <div>
+          <div class="text-muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;">Proveedores</div>
+          <div style="font-size:28px;font-weight:700;color:var(--rts-navy);line-height:1;">{{ counts.suppliers }}</div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0">
+        <a href="{{ url_for('suppliers_list') }}" class="btn btn-sm btn-rts w-100">
+          <i class="bi bi-arrow-right-circle me-1"></i>Gestionar Proveedores
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Marcas -->
+  <div class="col-sm-6 col-lg-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div style="width:52px;height:52px;border-radius:12px;background:var(--rts-blue);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="bi bi-award" style="font-size:22px;color:#fff;"></i>
+        </div>
+        <div>
+          <div class="text-muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;">Marcas</div>
+          <div style="font-size:28px;font-weight:700;color:var(--rts-navy);line-height:1;">{{ counts.brands }}</div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0">
+        <a href="{{ url_for('brands_list') }}" class="btn btn-sm btn-outline-primary w-100">
+          <i class="bi bi-arrow-right-circle me-1"></i>Gestionar Marcas
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Categorías -->
+  <div class="col-sm-6 col-lg-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div style="width:52px;height:52px;border-radius:12px;background:#6f42c1;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="bi bi-tag" style="font-size:22px;color:#fff;"></i>
+        </div>
+        <div>
+          <div class="text-muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;">Categorías</div>
+          <div style="font-size:28px;font-weight:700;color:var(--rts-navy);line-height:1;">{{ counts.categories }}</div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0">
+        <a href="{{ url_for('categories_list') }}" class="btn btn-sm btn-outline-secondary w-100">
+          <i class="bi bi-arrow-right-circle me-1"></i>Ver Categorías
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clientes -->
+  <div class="col-sm-6 col-lg-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div style="width:52px;height:52px;border-radius:12px;background:#28a745;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="bi bi-building" style="font-size:22px;color:#fff;"></i>
+        </div>
+        <div>
+          <div class="text-muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;">Clientes</div>
+          <div style="font-size:28px;font-weight:700;color:var(--rts-navy);line-height:1;">{{ counts.clients }}</div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0">
+        <a href="{{ url_for('clients_list') }}" class="btn btn-sm btn-outline-secondary w-100">
+          <i class="bi bi-arrow-right-circle me-1"></i>Ver Clientes
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Departamentos -->
+  <div class="col-sm-6 col-lg-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div style="width:52px;height:52px;border-radius:12px;background:#fd7e14;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="bi bi-diagram-3" style="font-size:22px;color:#fff;"></i>
+        </div>
+        <div>
+          <div class="text-muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;">Departamentos</div>
+          <div style="font-size:28px;font-weight:700;color:var(--rts-navy);line-height:1;">{{ counts.departments }}</div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0">
+        <a href="{{ url_for('admin.index') }}" class="btn btn-sm btn-outline-secondary w-100">
+          <i class="bi bi-arrow-right-circle me-1"></i>Ver Departamentos
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ID Config -->
+  <div class="col-sm-6 col-lg-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3 mb-2">
+          <div style="width:52px;height:52px;border-radius:12px;background:#dc3545;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="bi bi-qr-code" style="font-size:22px;color:#fff;"></i>
+          </div>
+          <div>
+            <div class="text-muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;">ID Configuration</div>
+            <code style="font-size:18px;font-weight:700;color:var(--rts-navy);">{{ cfg.preview() }}</code>
+          </div>
+        </div>
+        <div class="text-muted" style="font-size:12px;">
+          Prefijo: <strong>{{ cfg.prefix }}</strong> &bull;
+          Separador: <strong>{{ cfg.separator }}</strong> &bull;
+          Dígitos: <strong>{{ cfg.consecutive_digits }}</strong>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0">
+        <a href="{{ url_for('id_config_view') }}" class="btn btn-sm btn-outline-danger w-100">
+          <i class="bi bi-gear me-1"></i>Configurar Formato de ID
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Etiquetas -->
+  <div class="col-12 col-lg-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div style="width:52px;height:52px;border-radius:12px;background:#17a2b8;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="bi bi-printer" style="font-size:22px;color:#fff;"></i>
+        </div>
+        <div>
+          <div class="text-muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;">Etiquetas</div>
+          <div style="font-size:13px;color:var(--rts-gray);">Genera e imprime etiquetas con QR para tus activos.</div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0">
+        <a href="{{ url_for('labels_index') }}" class="btn btn-sm btn-outline-info w-100">
+          <i class="bi bi-tag me-1"></i>Generar Etiquetas
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

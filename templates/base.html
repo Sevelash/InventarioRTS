@@ -161,6 +161,23 @@
   </a>
   {% endif %}
 
+  {# ── SETUP / CONFIGURACIÓN ── #}
+  {% if current_user and current_user.role == 'admin' %}
+  <div class="nav-section sidebar-text">Configuración</div>
+  <a href="{{ url_for('setup_index') }}"
+     class="nav-link {% if request.endpoint and 'setup' in (request.endpoint or '') and 'label' not in (request.endpoint or '') %}active{% endif %}"
+     title="Catálogos Iniciales">
+    <i class="bi bi-gear-wide-connected"></i>
+    <span class="sidebar-text">Catálogos</span>
+  </a>
+  <a href="{{ url_for('labels_index') }}"
+     class="nav-link {% if 'label' in (request.endpoint or '') %}active{% endif %}"
+     title="Etiquetas">
+    <i class="bi bi-printer"></i>
+    <span class="sidebar-text">Etiquetas</span>
+  </a>
+  {% endif %}
+
   {# ── ADMIN ── #}
   {% if current_user and current_user.role == 'admin' %}
   <div class="nav-section sidebar-text">{{ T.nav_admin }}</div>

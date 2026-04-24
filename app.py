@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
-from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action, ALL_MODULES, Department, AccessRequest
+from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action, ALL_MODULES, Department, AccessRequest, Supplier, Brand, IDConfig
 from datetime import datetime, date, timedelta
 from i18n import get_translations, SUPPORTED_LANGS, DEFAULT_LANG
 import os
@@ -40,7 +40,7 @@ limiter.init_app(app)
 db.init_app(app)
 
 # ── Auth blueprint ────────────────────────────────────────────────────────────
-from auth import auth_bp, login_required, module_required
+from auth import auth_bp, login_required, module_required, admin_required
 app.register_blueprint(auth_bp)
 
 # ── Admin blueprint ───────────────────────────────────────────────────────────
@@ -158,6 +158,9 @@ with app.app_context():
                      ('admin_notes', 'TEXT'), ('reviewed_by', 'VARCHAR(150)'),
                      ('reviewed_at', 'DATETIME')]:
         _add_col_if_missing('access_requests', col, typ)
+
+    # brand_id on assets
+    _add_col_if_missing('assets', 'brand_id', 'INTEGER')
 
     # Seed IT department if none exist
     from models import Department
@@ -485,6 +488,7 @@ def assets_list():
 def asset_new():
     categories  = Category.query.order_by(Category.name).all()
     clients     = Client.query.filter_by(active=True).order_by(Client.name).all()
+    brands      = Brand.query.filter_by(active=True).order_by(Brand.name).all()
     return_url  = request.args.get('return_url') or url_for('assets_list')
     if request.method == 'POST':
         return_url = request.form.get('return_url') or return_url
@@ -492,7 +496,7 @@ def asset_new():
         if Asset.query.filter_by(asset_tag=asset_tag).first():
             flash(f'El Asset Tag "{asset_tag}" ya existe.', 'danger')
             return render_template('assets/form.html', categories=categories,
-                                   clients=clients, asset=None,
+                                   clients=clients, brands=brands, asset=None,
                                    asset_type_choices=Asset.ASSET_TYPE_CHOICES,
                                    form=request.form, return_url=return_url)
         asset = Asset(
@@ -507,6 +511,7 @@ def asset_new():
             os_version=request.form.get('os_version', '').strip() or None,
             category_id=request.form.get('category_id') or None,
             client_id=request.form.get('client_id') or None,
+            brand_id=request.form.get('brand_id') or None,
             status=request.form.get('status', 'available'),
             location_type=request.form.get('location_type', 'en_sitio'),
             location=request.form.get('location', '').strip() or None,
@@ -524,7 +529,7 @@ def asset_new():
         flash(f'Activo "{asset.name}" creado correctamente.', 'success')
         return redirect(return_url)
     return render_template('assets/form.html', categories=categories,
-                           clients=clients, asset=None,
+                           clients=clients, brands=brands, asset=None,
                            asset_type_choices=Asset.ASSET_TYPE_CHOICES,
                            form={}, return_url=return_url)
 
@@ -549,6 +554,7 @@ def asset_edit(id):
     asset      = Asset.query.get_or_404(id)
     categories = Category.query.order_by(Category.name).all()
     clients    = Client.query.filter_by(active=True).order_by(Client.name).all()
+    brands     = Brand.query.filter_by(active=True).order_by(Brand.name).all()
     return_url = request.args.get('return_url') or url_for('assets_list')
     if request.method == 'POST':
         return_url = request.form.get('return_url') or return_url
@@ -557,7 +563,7 @@ def asset_edit(id):
         if existing and existing.id != asset.id:
             flash(f'El Asset Tag "{new_tag}" ya existe en otro activo.', 'danger')
             return render_template('assets/form.html', categories=categories,
-                                   clients=clients, asset=asset,
+                                   clients=clients, brands=brands, asset=asset,
                                    asset_type_choices=Asset.ASSET_TYPE_CHOICES,
                                    form=request.form, return_url=return_url)
         changes = []
@@ -582,6 +588,7 @@ def asset_edit(id):
         asset.os_version       = request.form.get('os_version', '').strip() or None
         asset.category_id      = request.form.get('category_id') or None
         asset.client_id        = new_client_id
+        asset.brand_id         = request.form.get('brand_id') or None
         asset.status           = request.form.get('status', 'available')
         asset.location_type    = request.form.get('location_type', 'en_sitio')
         asset.location         = request.form.get('location', '').strip() or None
@@ -597,7 +604,7 @@ def asset_edit(id):
         flash(f'Activo "{asset.name}" actualizado.', 'success')
         return redirect(return_url)
     return render_template('assets/form.html', categories=categories,
-                           clients=clients, asset=asset,
+                           clients=clients, brands=brands, asset=asset,
                            asset_type_choices=Asset.ASSET_TYPE_CHOICES,
                            form={}, return_url=return_url)
 
@@ -1540,6 +1547,249 @@ def inject_globals():
             'devuelto':     'dark',
         },
     }
+
+
+# ── SETUP / CATALOGS ──────────────────────────────────────────────────────────
+
+import qrcode, io, base64
+
+def _qr_b64(text):
+    qr = qrcode.QRCode(version=1, box_size=4, border=2)
+    qr.add_data(text)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color='black', back_color='white')
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+@app.route('/setup')
+@admin_required
+def setup_index():
+    counts = {
+        'suppliers':   Supplier.query.count(),
+        'brands':      Brand.query.count(),
+        'categories':  Category.query.count(),
+        'clients':     Client.query.filter_by(active=True).count(),
+        'departments': Department.query.filter_by(active=True).count(),
+    }
+    cfg = IDConfig.get()
+    return render_template('setup/index.html', counts=counts, cfg=cfg)
+
+
+# ── Suppliers ─────────────────────────────────────────────────────────────────
+
+@app.route('/setup/suppliers')
+@admin_required
+def suppliers_list():
+    suppliers = Supplier.query.order_by(Supplier.name).all()
+    return render_template('setup/suppliers.html', suppliers=suppliers)
+
+
+@app.route('/setup/suppliers/new', methods=['GET', 'POST'])
+@admin_required
+def supplier_new():
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('El nombre del proveedor es obligatorio.', 'danger')
+            return render_template('setup/supplier_form.html', supplier=None, form=request.form)
+        if Supplier.query.filter_by(name=name).first():
+            flash(f'Ya existe un proveedor con el nombre "{name}".', 'danger')
+            return render_template('setup/supplier_form.html', supplier=None, form=request.form)
+        s = Supplier(
+            name=name,
+            contact_name=request.form.get('contact_name', '').strip() or None,
+            email=request.form.get('email', '').strip() or None,
+            phone=request.form.get('phone', '').strip() or None,
+            website=request.form.get('website', '').strip() or None,
+            country=request.form.get('country', '').strip() or None,
+            notes=request.form.get('notes', '').strip() or None,
+            active='active' in request.form,
+        )
+        db.session.add(s)
+        log_action('create', 'supplier', entity_name=name)
+        db.session.commit()
+        flash(f'Proveedor "{name}" creado.', 'success')
+        return redirect(url_for('suppliers_list'))
+    return render_template('setup/supplier_form.html', supplier=None, form={})
+
+
+@app.route('/setup/suppliers/<int:id>/edit', methods=['GET', 'POST'])
+@admin_required
+def supplier_edit(id):
+    s = Supplier.query.get_or_404(id)
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('El nombre del proveedor es obligatorio.', 'danger')
+            return render_template('setup/supplier_form.html', supplier=s, form=request.form)
+        dup = Supplier.query.filter_by(name=name).first()
+        if dup and dup.id != s.id:
+            flash(f'Ya existe un proveedor con el nombre "{name}".', 'danger')
+            return render_template('setup/supplier_form.html', supplier=s, form=request.form)
+        s.name         = name
+        s.contact_name = request.form.get('contact_name', '').strip() or None
+        s.email        = request.form.get('email', '').strip() or None
+        s.phone        = request.form.get('phone', '').strip() or None
+        s.website      = request.form.get('website', '').strip() or None
+        s.country      = request.form.get('country', '').strip() or None
+        s.notes        = request.form.get('notes', '').strip() or None
+        s.active       = 'active' in request.form
+        log_action('update', 'supplier', entity_id=s.id, entity_name=s.name)
+        db.session.commit()
+        flash(f'Proveedor "{s.name}" actualizado.', 'success')
+        return redirect(url_for('suppliers_list'))
+    return render_template('setup/supplier_form.html', supplier=s, form={})
+
+
+@app.route('/setup/suppliers/<int:id>/delete', methods=['POST'])
+@admin_required
+def supplier_delete(id):
+    s = Supplier.query.get_or_404(id)
+    name = s.name
+    log_action('delete', 'supplier', entity_id=s.id, entity_name=name)
+    db.session.delete(s)
+    db.session.commit()
+    flash(f'Proveedor "{name}" eliminado.', 'success')
+    return redirect(url_for('suppliers_list'))
+
+
+# ── Brands ────────────────────────────────────────────────────────────────────
+
+@app.route('/setup/brands')
+@admin_required
+def brands_list():
+    brands = Brand.query.order_by(Brand.name).all()
+    return render_template('setup/brands.html', brands=brands)
+
+
+@app.route('/setup/brands/new', methods=['GET', 'POST'])
+@admin_required
+def brand_new():
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('El nombre de la marca es obligatorio.', 'danger')
+            return render_template('setup/brand_form.html', brand=None, form=request.form)
+        if Brand.query.filter_by(name=name).first():
+            flash(f'Ya existe una marca con el nombre "{name}".', 'danger')
+            return render_template('setup/brand_form.html', brand=None, form=request.form)
+        b = Brand(
+            name=name,
+            description=request.form.get('description', '').strip() or None,
+            active='active' in request.form,
+        )
+        db.session.add(b)
+        log_action('create', 'brand', entity_name=name)
+        db.session.commit()
+        flash(f'Marca "{name}" creada.', 'success')
+        return redirect(url_for('brands_list'))
+    return render_template('setup/brand_form.html', brand=None, form={})
+
+
+@app.route('/setup/brands/<int:id>/edit', methods=['GET', 'POST'])
+@admin_required
+def brand_edit(id):
+    b = Brand.query.get_or_404(id)
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('El nombre de la marca es obligatorio.', 'danger')
+            return render_template('setup/brand_form.html', brand=b, form=request.form)
+        dup = Brand.query.filter_by(name=name).first()
+        if dup and dup.id != b.id:
+            flash(f'Ya existe una marca con el nombre "{name}".', 'danger')
+            return render_template('setup/brand_form.html', brand=b, form=request.form)
+        b.name        = name
+        b.description = request.form.get('description', '').strip() or None
+        b.active      = 'active' in request.form
+        log_action('update', 'brand', entity_id=b.id, entity_name=b.name)
+        db.session.commit()
+        flash(f'Marca "{b.name}" actualizada.', 'success')
+        return redirect(url_for('brands_list'))
+    return render_template('setup/brand_form.html', brand=b, form={})
+
+
+@app.route('/setup/brands/<int:id>/delete', methods=['POST'])
+@admin_required
+def brand_delete(id):
+    b = Brand.query.get_or_404(id)
+    name = b.name
+    log_action('delete', 'brand', entity_id=b.id, entity_name=name)
+    db.session.delete(b)
+    db.session.commit()
+    flash(f'Marca "{name}" eliminada.', 'success')
+    return redirect(url_for('brands_list'))
+
+
+# ── ID Config ─────────────────────────────────────────────────────────────────
+
+@app.route('/setup/id-config', methods=['GET', 'POST'])
+@admin_required
+def id_config_view():
+    cfg = IDConfig.get()
+    if request.method == 'POST':
+        cfg.prefix             = request.form.get('prefix', 'RTS').strip()[:10]
+        cfg.separator          = request.form.get('separator', '-')[:3]
+        cfg.use_category_code  = 'use_category_code' in request.form
+        cfg.category_code_len  = int(request.form.get('category_code_len', 1))
+        cfg.use_year           = 'use_year' in request.form
+        cfg.year_format        = request.form.get('year_format', 'YY')
+        cfg.consecutive_digits = int(request.form.get('consecutive_digits', 3))
+        next_val               = request.form.get('next_consecutive', '').strip()
+        if next_val.isdigit():
+            cfg.next_consecutive = int(next_val)
+        log_action('update', 'id_config', entity_name='ID Configuration')
+        db.session.commit()
+        flash('Configuración de ID guardada.', 'success')
+        return redirect(url_for('id_config_view'))
+    return render_template('setup/id_config.html', cfg=cfg)
+
+
+@app.route('/setup/id-config/generate')
+@admin_required
+def id_config_generate():
+    category = request.args.get('category', '')
+    cfg = IDConfig.get()
+    tag = cfg.generate_tag(category_name=category)
+    cfg.next_consecutive += 1
+    db.session.commit()
+    return jsonify({'tag': tag})
+
+
+# ── Labels ────────────────────────────────────────────────────────────────────
+
+@app.route('/setup/labels')
+@admin_required
+def labels_index():
+    assets = Asset.query.order_by(Asset.asset_tag).all()
+    return render_template('setup/labels.html', assets=assets)
+
+
+@app.route('/setup/labels/print', methods=['POST'])
+@admin_required
+def labels_print():
+    ids = request.form.getlist('asset_ids')
+    if not ids:
+        flash('Selecciona al menos un activo para imprimir.', 'warning')
+        return redirect(url_for('labels_index'))
+    assets = Asset.query.filter(Asset.id.in_([int(i) for i in ids])).all()
+    labels = []
+    for a in assets:
+        labels.append({
+            'asset':  a,
+            'qr_b64': _qr_b64(a.asset_tag),
+        })
+    return render_template('setup/labels_print.html', labels=labels)
+
+
+@app.route('/setup/labels/single/<int:asset_id>')
+@admin_required
+def label_single(asset_id):
+    a = Asset.query.get_or_404(asset_id)
+    labels = [{'asset': a, 'qr_b64': _qr_b64(a.asset_tag)}]
+    return render_template('setup/labels_print.html', labels=labels)
 
 
 @app.errorhandler(403)

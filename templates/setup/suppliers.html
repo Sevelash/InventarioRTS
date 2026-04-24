@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}Proveedores — RTS{% endblock %}
+{% block page_title %}Proveedores{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('supplier_new') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nuevo Proveedor
+  </a>
+{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([('Configuración', url_for('setup_index')), ('Proveedores', none)]) }}
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Nombre</th>
+            <th>Contacto</th>
+            <th>Email</th>
+            <th>Teléfono</th>
+            <th>País</th>
+            <th class="text-center">Activo</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in suppliers %}
+          <tr>
+            <td><strong>{{ s.name }}</strong></td>
+            <td>{{ s.contact_name or '—' }}</td>
+            <td>
+              {% if s.email %}
+                <a href="mailto:{{ s.email }}">{{ s.email }}</a>
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ s.phone or '—' }}</td>
+            <td>{{ s.country or '—' }}</td>
+            <td class="text-center">
+              {% if s.active %}
+                <span class="badge bg-success">Sí</span>
+              {% else %}
+                <span class="badge bg-secondary">No</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <a href="{{ url_for('supplier_edit', id=s.id) }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form method="post" action="{{ url_for('supplier_delete', id=s.id) }}" class="d-inline"
+                    onsubmit="return confirm('¿Eliminar proveedor «{{ s.name }}»? Esta acción no se puede deshacer.')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-4">
+              <i class="bi bi-inbox me-2"></i>No hay proveedores registrados.
+              <a href="{{ url_for('supplier_new') }}">Agregar primero</a>.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

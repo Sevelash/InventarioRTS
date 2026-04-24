@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}Configuración de ID — RTS{% endblock %}
+{% block page_title %}Configuración de Asset Tag{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([('Configuración', url_for('setup_index')), ('ID Config', none)]) }}
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header"><i class="bi bi-sliders me-2"></i>Reglas del Asset Tag</div>
+      <div class="card-body">
+        <form method="post" id="id-config-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="row g-3">
+
+            <div class="col-sm-6">
+              <label class="form-label">Prefijo</label>
+              <input type="text" name="prefix" id="f-prefix" class="form-control" maxlength="10"
+                     value="{{ cfg.prefix }}" placeholder="RTS">
+              <div class="form-text">Texto fijo al inicio (ej. RTS, CORP)</div>
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Separador</label>
+              <select name="separator" id="f-sep" class="form-select">
+                <option value="-" {% if cfg.separator == '-' %}selected{% endif %}>Guión  —  RTS-L001</option>
+                <option value="/" {% if cfg.separator == '/' %}selected{% endif %}>Barra  —  RTS/L001</option>
+                <option value="." {% if cfg.separator == '.' %}selected{% endif %}>Punto  —  RTS.L001</option>
+                <option value="" {% if cfg.separator == '' %}selected{% endif %}>Sin separador  —  RTSL001</option>
+              </select>
+            </div>
+
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="use_category_code"
+                       id="f-usecat" {% if cfg.use_category_code %}checked{% endif %}>
+                <label class="form-check-label" for="f-usecat">Usar código de categoría</label>
+              </div>
+            </div>
+
+            <div class="col-sm-6" id="cat-len-group">
+              <label class="form-label">Longitud del código de categoría</label>
+              <select name="category_code_len" id="f-catlen" class="form-select">
+                <option value="1" {% if cfg.category_code_len == 1 %}selected{% endif %}>1 letra  (L)</option>
+                <option value="2" {% if cfg.category_code_len == 2 %}selected{% endif %}>2 letras (LA)</option>
+                <option value="3" {% if cfg.category_code_len == 3 %}selected{% endif %}>3 letras (LAP)</option>
+              </select>
+            </div>
+
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="use_year"
+                       id="f-useyear" {% if cfg.use_year %}checked{% endif %}>
+                <label class="form-check-label" for="f-useyear">Incluir año</label>
+              </div>
+            </div>
+
+            <div class="col-sm-6" id="year-fmt-group">
+              <label class="form-label">Formato de año</label>
+              <div class="d-flex gap-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="year_format" id="yf-yy" value="YY"
+                         {% if cfg.year_format == 'YY' %}checked{% endif %}>
+                  <label class="form-check-label" for="yf-yy">YY (26)</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="year_format" id="yf-yyyy" value="YYYY"
+                         {% if cfg.year_format == 'YYYY' %}checked{% endif %}>
+                  <label class="form-check-label" for="yf-yyyy">YYYY (2026)</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Dígitos consecutivos</label>
+              <select name="consecutive_digits" id="f-digits" class="form-select">
+                <option value="2" {% if cfg.consecutive_digits == 2 %}selected{% endif %}>2  (01, 99)</option>
+                <option value="3" {% if cfg.consecutive_digits == 3 %}selected{% endif %}>3  (001, 999)</option>
+                <option value="4" {% if cfg.consecutive_digits == 4 %}selected{% endif %}>4  (0001, 9999)</option>
+              </select>
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Próximo consecutivo</label>
+              <input type="number" name="next_consecutive" id="f-next" class="form-control" min="1"
+                     value="{{ cfg.next_consecutive }}">
+              <div class="form-text">Edita para reiniciar o corregir el contador.</div>
+            </div>
+
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-rts px-4">
+              <i class="bi bi-save me-1"></i>Guardar Configuración
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview panel -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm mb-3" style="position:sticky;top:80px;">
+      <div class="card-header"><i class="bi bi-eye me-2"></i>Vista Previa</div>
+      <div class="card-body text-center py-4">
+        <div id="preview-tag"
+             style="font-family:monospace;font-size:36px;font-weight:700;color:var(--rts-navy);letter-spacing:.08em;background:#f0f4ff;border-radius:10px;padding:18px 24px;display:inline-block;min-width:200px;">
+          {{ cfg.preview() }}
+        </div>
+        <div class="text-muted mt-2" style="font-size:12px;">
+          Ejemplo con categoría "Laptop" y próximo consecutivo <span id="preview-next">{{ cfg.next_consecutive }}</span>
+        </div>
+      </div>
+      <div class="card-footer border-0 bg-transparent">
+        <button type="button" class="btn btn-outline-primary w-100" id="btn-generate">
+          <i class="bi bi-arrow-right-circle me-1"></i>Generar siguiente ID (confirmar &amp; avanzar)
+        </button>
+        <div id="generated-result" class="mt-2 text-center" style="display:none;">
+          <span class="badge bg-success fs-5 px-3 py-2" id="generated-tag"></span>
+          <div class="text-muted mt-1" style="font-size:12px;">ID generado y contador avanzado.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const prefix  = document.getElementById('f-prefix');
+  const sep     = document.getElementById('f-sep');
+  const useCat  = document.getElementById('f-usecat');
+  const catLen  = document.getElementById('f-catlen');
+  const useYear = document.getElementById('f-useyear');
+  const next    = document.getElementById('f-next');
+  const digits  = document.getElementById('f-digits');
+  const preview = document.getElementById('preview-tag');
+  const previewNext = document.getElementById('preview-next');
+  const catLenGroup  = document.getElementById('cat-len-group');
+  const yearFmtGroup = document.getElementById('year-fmt-group');
+
+  function getYearFmt() {
+    const el = document.querySelector('input[name="year_format"]:checked');
+    return el ? el.value : 'YY';
+  }
+
+  function buildPreview() {
+    const p  = (prefix.value || '').toUpperCase();
+    const s  = sep.value;
+    const n  = parseInt(next.value) || 1;
+    const d  = parseInt(digits.value) || 3;
+    const num = String(n).padStart(d, '0');
+    const parts = [];
+    if (p) parts.push(p);
+    if (useCat.checked) {
+      const len = parseInt(catLen.value) || 1;
+      parts.push('LAPTOP'.slice(0, len));
+    }
+    if (useYear.checked) {
+      const now = new Date();
+      const yr  = getYearFmt() === 'YYYY' ? now.getFullYear() : String(now.getFullYear()).slice(-2);
+      parts.push(yr);
+    }
+    parts.push(num);
+    preview.textContent = parts.join(s);
+    previewNext.textContent = n;
+  }
+
+  function toggleGroups() {
+    catLenGroup.style.display  = useCat.checked  ? '' : 'none';
+    yearFmtGroup.style.display = useYear.checked ? '' : 'none';
+  }
+
+  [prefix, sep, useCat, catLen, useYear, digits, next].forEach(el => {
+    el.addEventListener('change', () => { toggleGroups(); buildPreview(); });
+    el.addEventListener('input',  () => { toggleGroups(); buildPreview(); });
+  });
+  document.querySelectorAll('input[name="year_format"]').forEach(el =>
+    el.addEventListener('change', buildPreview));
+
+  toggleGroups();
+  buildPreview();
+
+  // Generate next ID via AJAX
+  document.getElementById('btn-generate').addEventListener('click', function () {
+    const catPart = useCat.checked
+      ? 'Laptop'
+      : '';
+    fetch(`{{ url_for('id_config_generate') }}?category=${encodeURIComponent(catPart)}`)
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('generated-tag').textContent = data.tag;
+        document.getElementById('generated-result').style.display = '';
+        // bump preview next
+        const cur = parseInt(next.value) || 1;
+        next.value = cur + 1;
+        buildPreview();
+      })
+      .catch(() => alert('Error al generar ID. Verifica la configuración.'));
+  });
+})();
+</script>
+{% endblock %}

@@ -116,6 +116,83 @@ class Client(db.Model):
         return f'<Client {self.name}>'
 
 
+class Supplier(db.Model):
+    __tablename__ = 'suppliers'
+    id           = db.Column(db.Integer, primary_key=True)
+    name         = db.Column(db.String(150), nullable=False, unique=True)
+    contact_name = db.Column(db.String(150))
+    email        = db.Column(db.String(150))
+    phone        = db.Column(db.String(50))
+    website      = db.Column(db.String(200))
+    country      = db.Column(db.String(80))
+    notes        = db.Column(db.Text)
+    active       = db.Column(db.Boolean, default=True)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Supplier {self.name}>'
+
+
+class Brand(db.Model):
+    __tablename__ = 'brands'
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.String(300))
+    active      = db.Column(db.Boolean, default=True)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    assets = db.relationship('Asset', backref='brand', lazy=True)
+
+    def __repr__(self):
+        return f'<Brand {self.name}>'
+
+
+class IDConfig(db.Model):
+    """Stores the asset tag auto-generation rules."""
+    __tablename__ = 'id_config'
+    id                   = db.Column(db.Integer, primary_key=True)
+    prefix               = db.Column(db.String(10),  default='RTS')
+    separator            = db.Column(db.String(3),   default='-')
+    use_category_code    = db.Column(db.Boolean,     default=True)
+    category_code_len    = db.Column(db.Integer,     default=1)   # chars from category name
+    use_year             = db.Column(db.Boolean,     default=False)
+    year_format          = db.Column(db.String(6),   default='YY')  # YY or YYYY
+    consecutive_digits   = db.Column(db.Integer,     default=3)    # 001, 0001, etc.
+    next_consecutive     = db.Column(db.Integer,     default=1)
+    updated_at           = db.Column(db.DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @staticmethod
+    def get():
+        """Get config (create default if none)."""
+        cfg = IDConfig.query.first()
+        if not cfg:
+            cfg = IDConfig()
+            db.session.add(cfg)
+            db.session.commit()
+        return cfg
+
+    def generate_tag(self, category_name: str = '') -> str:
+        """Generate next asset tag based on current config."""
+        from datetime import datetime as dt
+        parts = [self.prefix] if self.prefix else []
+        if self.use_category_code and category_name:
+            code = ''.join(c for c in category_name.upper() if c.isalpha())[:self.category_code_len]
+            parts.append(code)
+        if self.use_year:
+            fmt = '%Y' if self.year_format == 'YYYY' else '%y'
+            parts.append(dt.utcnow().strftime(fmt))
+        consecutive = str(self.next_consecutive).zfill(self.consecutive_digits)
+        parts.append(consecutive)
+        return self.separator.join(parts)
+
+    def preview(self) -> str:
+        """Show example with current settings."""
+        return self.generate_tag(category_name='Laptop')
+
+    def __repr__(self):
+        return f'<IDConfig prefix={self.prefix}>'
+
+
 class Asset(db.Model):
     __tablename__ = 'assets'
     id = db.Column(db.Integer, primary_key=True)
@@ -145,6 +222,7 @@ class Asset(db.Model):
     last_maintenance = db.Column(db.Date)
     notes = db.Column(db.Text)
     department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
+    brand_id      = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     assignments = db.relationship('Assignment', backref='asset', lazy=True,

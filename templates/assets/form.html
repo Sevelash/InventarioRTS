@@ -118,6 +118,24 @@
                      style="font-family:monospace;">
             </div>
 
+            {% if brands %}
+            <div class="col-sm-4">
+              <label class="form-label">Marca</label>
+              <select name="brand_id" class="form-select">
+                <option value="">— Sin marca —</option>
+                {% for br in brands %}
+                <option value="{{ br.id }}"
+                  {% if form.get('brand_id', (asset.brand_id|string if asset else '')) == br.id|string %}selected{% endif %}>
+                  {{ br.name }}
+                </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">
+                <a href="{{ url_for('brand_new') }}" target="_blank">Agregar marca</a>
+              </div>
+            </div>
+            {% endif %}
+
           </div>
         </div>
       </div>
