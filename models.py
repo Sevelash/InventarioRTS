@@ -216,6 +216,70 @@ class IDConfig(db.Model):
         return f'<IDConfig prefix={self.prefix}>'
 
 
+class PurchaseOrder(db.Model):
+    """Orden de Compra — reutilizable en múltiples activos."""
+    __tablename__ = 'purchase_orders'
+    id            = db.Column(db.Integer, primary_key=True)
+    number        = db.Column(db.String(100), nullable=False)   # N° de OC
+    date          = db.Column(db.Date)
+    supplier_id   = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=True)
+    supplier_name = db.Column(db.String(150))                   # nombre libre si no hay Supplier
+    total_amount  = db.Column(db.Float)
+    currency      = db.Column(db.String(3), default='MXN')
+    notes         = db.Column(db.Text)
+    file_path     = db.Column(db.String(500))                   # ruta en disco
+    file_name     = db.Column(db.String(300))                   # nombre original
+    file_mime     = db.Column(db.String(100))
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+    supplier      = db.relationship('Supplier', backref='purchase_orders', lazy=True)
+
+    @property
+    def display(self):
+        parts = [f'OC #{self.number}']
+        if self.date:
+            parts.append(self.date.strftime('%d/%m/%Y'))
+        s = self.supplier_name or (self.supplier.name if self.supplier else '')
+        if s:
+            parts.append(f'· {s}')
+        return '  '.join(parts)
+
+    def __repr__(self):
+        return f'<PurchaseOrder #{self.number}>'
+
+
+class Invoice(db.Model):
+    """Factura — reutilizable en múltiples activos."""
+    __tablename__ = 'invoices'
+    id            = db.Column(db.Integer, primary_key=True)
+    number        = db.Column(db.String(100), nullable=False)   # N° de factura
+    date          = db.Column(db.Date)
+    supplier_id   = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=True)
+    supplier_name = db.Column(db.String(150))
+    total_amount  = db.Column(db.Float)
+    currency      = db.Column(db.String(3), default='MXN')
+    notes         = db.Column(db.Text)
+    file_path     = db.Column(db.String(500))
+    file_name     = db.Column(db.String(300))
+    file_mime     = db.Column(db.String(100))
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+    supplier      = db.relationship('Supplier', backref='invoices', lazy=True)
+
+    @property
+    def display(self):
+        parts = [f'FAC #{self.number}']
+        if self.date:
+            parts.append(self.date.strftime('%d/%m/%Y'))
+        s = self.supplier_name or (self.supplier.name if self.supplier else '')
+        if s:
+            parts.append(f'· {s}')
+        return '  '.join(parts)
+
+    def __repr__(self):
+        return f'<Invoice #{self.number}>'
+
+
 class Asset(db.Model):
     __tablename__ = 'assets'
     id = db.Column(db.Integer, primary_key=True)
@@ -244,8 +308,10 @@ class Asset(db.Model):
     warranty_expiry = db.Column(db.Date)
     last_maintenance = db.Column(db.Date)
     notes = db.Column(db.Text)
-    department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
-    brand_id      = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=True)
+    department_id     = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
+    brand_id          = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=True)
+    purchase_order_id = db.Column(db.Integer, db.ForeignKey('purchase_orders.id'), nullable=True)
+    invoice_id        = db.Column(db.Integer, db.ForeignKey('invoices.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     assignments = db.relationship('Assignment', backref='asset', lazy=True,

@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
-from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action, ALL_MODULES, Department, AccessRequest, Supplier, Brand, IDConfig
+from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action, ALL_MODULES, Department, AccessRequest, Supplier, Brand, IDConfig, PurchaseOrder, Invoice
 from datetime import datetime, date, timedelta
 from i18n import get_translations, SUPPORTED_LANGS, DEFAULT_LANG
 import os
@@ -173,6 +173,10 @@ with app.app_context():
         ('notes',         'TEXT'),
     ]:
         _add_col_if_missing('clients', col, typ)
+
+    # Purchase orders & invoices FK on assets
+    _add_col_if_missing('assets', 'purchase_order_id', 'INTEGER')
+    _add_col_if_missing('assets', 'invoice_id',        'INTEGER')
 
     # Seed IT department if none exist
     from models import Department
@@ -498,18 +502,21 @@ def assets_list():
 @app.route('/assets/new', methods=['GET', 'POST'])
 @login_required
 def asset_new():
-    categories  = Category.query.order_by(Category.name).all()
-    clients     = Client.query.filter_by(active=True).order_by(Client.name).all()
-    brands      = Brand.query.filter_by(active=True).order_by(Brand.name).all()
-    return_url  = request.args.get('return_url') or url_for('assets_list')
+    categories      = Category.query.order_by(Category.name).all()
+    clients         = Client.query.filter_by(active=True).order_by(Client.name).all()
+    brands          = Brand.query.filter_by(active=True).order_by(Brand.name).all()
+    purchase_orders = PurchaseOrder.query.order_by(PurchaseOrder.created_at.desc()).all()
+    invoices        = Invoice.query.order_by(Invoice.created_at.desc()).all()
+    return_url      = request.args.get('return_url') or url_for('assets_list')
     if request.method == 'POST':
         return_url = request.form.get('return_url') or return_url
         asset_tag  = request.form.get('asset_tag', '').strip()
         if Asset.query.filter_by(asset_tag=asset_tag).first():
             flash(f'El Asset Tag "{asset_tag}" ya existe.', 'danger')
             return render_template('assets/form.html', categories=categories,
-                                   clients=clients, brands=brands, asset=None,
-                                   asset_type_choices=Asset.ASSET_TYPE_CHOICES,
+                                   clients=clients, brands=brands,
+                                   purchase_orders=purchase_orders, invoices=invoices,
+                                   asset=None, asset_type_choices=Asset.ASSET_TYPE_CHOICES,
                                    form=request.form, return_url=return_url)
         asset = Asset(
             name=request.form.get('name', '').strip(),
@@ -524,6 +531,8 @@ def asset_new():
             category_id=request.form.get('category_id') or None,
             client_id=request.form.get('client_id') or None,
             brand_id=request.form.get('brand_id') or None,
+            purchase_order_id=request.form.get('purchase_order_id') or None,
+            invoice_id=request.form.get('invoice_id') or None,
             status=request.form.get('status', 'available'),
             location_type=request.form.get('location_type', 'en_sitio'),
             location=request.form.get('location', '').strip() or None,
@@ -541,8 +550,9 @@ def asset_new():
         flash(f'Activo "{asset.name}" creado correctamente.', 'success')
         return redirect(return_url)
     return render_template('assets/form.html', categories=categories,
-                           clients=clients, brands=brands, asset=None,
-                           asset_type_choices=Asset.ASSET_TYPE_CHOICES,
+                           clients=clients, brands=brands,
+                           purchase_orders=purchase_orders, invoices=invoices,
+                           asset=None, asset_type_choices=Asset.ASSET_TYPE_CHOICES,
                            form={}, return_url=return_url)
 
 
@@ -564,10 +574,12 @@ def asset_detail(id):
 @login_required
 def asset_edit(id):
     asset      = Asset.query.get_or_404(id)
-    categories = Category.query.order_by(Category.name).all()
-    clients    = Client.query.filter_by(active=True).order_by(Client.name).all()
-    brands     = Brand.query.filter_by(active=True).order_by(Brand.name).all()
-    return_url = request.args.get('return_url') or url_for('assets_list')
+    categories      = Category.query.order_by(Category.name).all()
+    clients         = Client.query.filter_by(active=True).order_by(Client.name).all()
+    brands          = Brand.query.filter_by(active=True).order_by(Brand.name).all()
+    purchase_orders = PurchaseOrder.query.order_by(PurchaseOrder.created_at.desc()).all()
+    invoices        = Invoice.query.order_by(Invoice.created_at.desc()).all()
+    return_url      = request.args.get('return_url') or url_for('assets_list')
     if request.method == 'POST':
         return_url = request.form.get('return_url') or return_url
         new_tag    = request.form.get('asset_tag', '').strip()
@@ -575,8 +587,9 @@ def asset_edit(id):
         if existing and existing.id != asset.id:
             flash(f'El Asset Tag "{new_tag}" ya existe en otro activo.', 'danger')
             return render_template('assets/form.html', categories=categories,
-                                   clients=clients, brands=brands, asset=asset,
-                                   asset_type_choices=Asset.ASSET_TYPE_CHOICES,
+                                   clients=clients, brands=brands,
+                                   purchase_orders=purchase_orders, invoices=invoices,
+                                   asset=asset, asset_type_choices=Asset.ASSET_TYPE_CHOICES,
                                    form=request.form, return_url=return_url)
         changes = []
         if asset.name != request.form.get('name', '').strip():
@@ -587,37 +600,40 @@ def asset_edit(id):
             changes.append(f'tipo: {asset.location_type} → {request.form.get("location_type")}')
         new_client_id = request.form.get('client_id') or None
         if str(asset.client_id or '') != str(new_client_id or ''):
-            changes.append(f'cliente actualizado')
+            changes.append('cliente actualizado')
 
-        asset.name             = request.form.get('name', '').strip()
-        asset.asset_tag        = new_tag
-        asset.asset_type       = request.form.get('asset_type', asset.asset_type or 'laptop')
-        asset.serial_number    = request.form.get('serial_number', '').strip() or None
-        asset.manufacturer     = request.form.get('manufacturer', '').strip() or None
-        asset.model            = request.form.get('model', '').strip() or None
-        asset.ram              = request.form.get('ram', '').strip() or None
-        asset.cpu              = request.form.get('cpu', '').strip() or None
-        asset.os_version       = request.form.get('os_version', '').strip() or None
-        asset.category_id      = request.form.get('category_id') or None
-        asset.client_id        = new_client_id
-        asset.brand_id         = request.form.get('brand_id') or None
-        asset.status           = request.form.get('status', 'available')
-        asset.location_type    = request.form.get('location_type', 'en_sitio')
-        asset.location         = request.form.get('location', '').strip() or None
-        asset.purchase_date    = parse_date(request.form.get('purchase_date'))
-        asset.purchase_cost    = float(request.form.get('purchase_cost')) if request.form.get('purchase_cost') else None
-        asset.supplier         = request.form.get('supplier', '').strip() or None
-        asset.warranty_expiry  = parse_date(request.form.get('warranty_expiry'))
-        asset.last_maintenance = parse_date(request.form.get('last_maintenance'))
-        asset.notes            = request.form.get('notes', '').strip() or None
+        asset.name              = request.form.get('name', '').strip()
+        asset.asset_tag         = new_tag
+        asset.asset_type        = request.form.get('asset_type', asset.asset_type or 'laptop')
+        asset.serial_number     = request.form.get('serial_number', '').strip() or None
+        asset.manufacturer      = request.form.get('manufacturer', '').strip() or None
+        asset.model             = request.form.get('model', '').strip() or None
+        asset.ram               = request.form.get('ram', '').strip() or None
+        asset.cpu               = request.form.get('cpu', '').strip() or None
+        asset.os_version        = request.form.get('os_version', '').strip() or None
+        asset.category_id       = request.form.get('category_id') or None
+        asset.client_id         = new_client_id
+        asset.brand_id          = request.form.get('brand_id') or None
+        asset.purchase_order_id = request.form.get('purchase_order_id') or None
+        asset.invoice_id        = request.form.get('invoice_id') or None
+        asset.status            = request.form.get('status', 'available')
+        asset.location_type     = request.form.get('location_type', 'en_sitio')
+        asset.location          = request.form.get('location', '').strip() or None
+        asset.purchase_date     = parse_date(request.form.get('purchase_date'))
+        asset.purchase_cost     = float(request.form.get('purchase_cost')) if request.form.get('purchase_cost') else None
+        asset.supplier          = request.form.get('supplier', '').strip() or None
+        asset.warranty_expiry   = parse_date(request.form.get('warranty_expiry'))
+        asset.last_maintenance  = parse_date(request.form.get('last_maintenance'))
+        asset.notes             = request.form.get('notes', '').strip() or None
         log_action('update', 'asset', entity_id=asset.id, entity_name=asset.name,
                    details='; '.join(changes) if changes else 'Actualización sin cambios clave')
         db.session.commit()
         flash(f'Activo "{asset.name}" actualizado.', 'success')
         return redirect(return_url)
     return render_template('assets/form.html', categories=categories,
-                           clients=clients, brands=brands, asset=asset,
-                           asset_type_choices=Asset.ASSET_TYPE_CHOICES,
+                           clients=clients, brands=brands,
+                           purchase_orders=purchase_orders, invoices=invoices,
+                           asset=asset, asset_type_choices=Asset.ASSET_TYPE_CHOICES,
                            form={}, return_url=return_url)
 
 
@@ -1345,6 +1361,133 @@ def client_import_template():
     return send_file(buf, as_attachment=True,
                      download_name='plantilla_clientes.xlsx',
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+# ── Purchase Orders & Invoices ────────────────────────────────────────────────
+
+_DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'uploads', 'documents')
+os.makedirs(_DOCS_DIR, exist_ok=True)
+
+_ALLOWED_DOC_EXT = {'.pdf', '.xml', '.xlsx', '.xls', '.jpg', '.jpeg', '.png', '.zip'}
+
+def _save_doc_file(file_storage):
+    """Save an uploaded file to _DOCS_DIR. Returns (stored_path, original_name, mime)."""
+    import uuid, mimetypes
+    original = file_storage.filename
+    ext = os.path.splitext(original)[1].lower()
+    if ext not in _ALLOWED_DOC_EXT:
+        raise ValueError(f'Tipo de archivo no permitido: {ext}')
+    stored_name = f'{uuid.uuid4().hex}{ext}'
+    full_path   = os.path.join(_DOCS_DIR, stored_name)
+    file_storage.save(full_path)
+    mime = mimetypes.guess_type(original)[0] or 'application/octet-stream'
+    return full_path, original, mime
+
+
+# ── API: list + upload POs ────────────────────────────────────────────────────
+
+@app.route('/api/purchase-orders')
+@login_required
+def api_purchase_orders():
+    pos = PurchaseOrder.query.order_by(PurchaseOrder.created_at.desc()).all()
+    return jsonify([{
+        'id': p.id, 'display': p.display,
+        'number': p.number,
+        'date': p.date.strftime('%d/%m/%Y') if p.date else '',
+        'supplier': p.supplier_name or (p.supplier.name if p.supplier else ''),
+        'amount': p.total_amount, 'currency': p.currency,
+        'has_file': bool(p.file_path),
+    } for p in pos])
+
+
+@app.route('/api/purchase-orders/upload', methods=['POST'])
+@login_required
+def api_po_upload():
+    number  = request.form.get('number', '').strip()
+    if not number:
+        return jsonify({'ok': False, 'error': 'El número de OC es obligatorio'}), 400
+    po = PurchaseOrder(
+        number=number,
+        date=parse_date(request.form.get('date')),
+        supplier_name=request.form.get('supplier_name', '').strip() or None,
+        total_amount=float(request.form.get('total_amount')) if request.form.get('total_amount') else None,
+        currency=request.form.get('currency', 'MXN'),
+        notes=request.form.get('notes', '').strip() or None,
+    )
+    f = request.files.get('file')
+    if f and f.filename:
+        try:
+            po.file_path, po.file_name, po.file_mime = _save_doc_file(f)
+        except ValueError as e:
+            return jsonify({'ok': False, 'error': str(e)}), 400
+    db.session.add(po)
+    db.session.commit()
+    log_action('create', 'purchase_order', entity_id=po.id, entity_name=po.number)
+    return jsonify({'ok': True, 'id': po.id, 'display': po.display})
+
+
+@app.route('/api/invoices')
+@login_required
+def api_invoices():
+    invs = Invoice.query.order_by(Invoice.created_at.desc()).all()
+    return jsonify([{
+        'id': i.id, 'display': i.display,
+        'number': i.number,
+        'date': i.date.strftime('%d/%m/%Y') if i.date else '',
+        'supplier': i.supplier_name or (i.supplier.name if i.supplier else ''),
+        'amount': i.total_amount, 'currency': i.currency,
+        'has_file': bool(i.file_path),
+    } for i in invs])
+
+
+@app.route('/api/invoices/upload', methods=['POST'])
+@login_required
+def api_invoice_upload():
+    number = request.form.get('number', '').strip()
+    if not number:
+        return jsonify({'ok': False, 'error': 'El número de factura es obligatorio'}), 400
+    inv = Invoice(
+        number=number,
+        date=parse_date(request.form.get('date')),
+        supplier_name=request.form.get('supplier_name', '').strip() or None,
+        total_amount=float(request.form.get('total_amount')) if request.form.get('total_amount') else None,
+        currency=request.form.get('currency', 'MXN'),
+        notes=request.form.get('notes', '').strip() or None,
+    )
+    f = request.files.get('file')
+    if f and f.filename:
+        try:
+            inv.file_path, inv.file_name, inv.file_mime = _save_doc_file(f)
+        except ValueError as e:
+            return jsonify({'ok': False, 'error': str(e)}), 400
+    db.session.add(inv)
+    db.session.commit()
+    log_action('create', 'invoice', entity_id=inv.id, entity_name=inv.number)
+    return jsonify({'ok': True, 'id': inv.id, 'display': inv.display})
+
+
+@app.route('/documents/po/<int:id>')
+@login_required
+def document_po_view(id):
+    po = PurchaseOrder.query.get_or_404(id)
+    if not po.file_path or not os.path.exists(po.file_path):
+        flash('Archivo no disponible.', 'warning')
+        return redirect(request.referrer or url_for('assets_list'))
+    return send_file(po.file_path, download_name=po.file_name,
+                     mimetype=po.file_mime or 'application/octet-stream',
+                     as_attachment=False)
+
+
+@app.route('/documents/invoice/<int:id>')
+@login_required
+def document_invoice_view(id):
+    inv = Invoice.query.get_or_404(id)
+    if not inv.file_path or not os.path.exists(inv.file_path):
+        flash('Archivo no disponible.', 'warning')
+        return redirect(request.referrer or url_for('assets_list'))
+    return send_file(inv.file_path, download_name=inv.file_name,
+                     mimetype=inv.file_mime or 'application/octet-stream',
+                     as_attachment=False)
 
 
 # ── Template filters & context ────────────────────────────────────────────────

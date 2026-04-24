@@ -229,6 +229,131 @@
                      value="{{ form.get('last_maintenance', asset.last_maintenance.strftime('%Y-%m-%d') if asset and asset.last_maintenance else '') }}">
             </div>
 
+            <!-- ── Orden de Compra ───────────────────────── -->
+            <div class="col-12"><hr class="my-1"></div>
+
+            <div class="col-sm-6">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-file-earmark-text me-1" style="color:var(--rts-navy);"></i>
+                Orden de Compra
+              </label>
+              <div class="input-group">
+                <select name="purchase_order_id" id="po-select" class="form-select">
+                  <option value="">— Sin OC —</option>
+                  {% for po in purchase_orders %}
+                  <option value="{{ po.id }}"
+                    {% if form.get('purchase_order_id', (asset.purchase_order_id|string if asset else '')) == po.id|string %}selected{% endif %}>
+                    {{ po.display }}
+                  </option>
+                  {% endfor %}
+                </select>
+                {% if asset and asset.purchase_order_id and asset.purchase_order and asset.purchase_order.file_path %}
+                <a href="{{ url_for('document_po_view', id=asset.purchase_order_id) }}"
+                   class="btn btn-outline-primary" target="_blank" title="Ver archivo">
+                  <i class="bi bi-eye"></i>
+                </a>
+                {% endif %}
+                <button type="button" class="btn btn-outline-secondary" title="Subir nueva OC"
+                        onclick="toggleUpload('po')">
+                  <i class="bi bi-upload"></i>
+                </button>
+              </div>
+              <!-- Upload inline PO -->
+              <div id="po-upload-area" class="mt-2 p-3 border rounded" style="display:none;background:#f8f9ff;">
+                <div class="fw-semibold mb-2" style="font-size:13px;">
+                  <i class="bi bi-upload me-1"></i>Subir nueva Orden de Compra
+                </div>
+                <div class="row g-2">
+                  <div class="col-sm-5">
+                    <input type="text" id="po-number" class="form-control form-control-sm"
+                           placeholder="N° de OC *" required>
+                  </div>
+                  <div class="col-sm-4">
+                    <input type="date" id="po-date" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-sm-3">
+                    <input type="text" id="po-supplier" class="form-control form-control-sm"
+                           placeholder="Proveedor">
+                  </div>
+                  <div class="col-12">
+                    <input type="file" id="po-file" class="form-control form-control-sm"
+                           accept=".pdf,.xml,.xlsx,.jpg,.jpeg,.png,.zip">
+                    <div class="form-text">PDF, XML, Excel, imagen — opcional</div>
+                  </div>
+                  <div class="col-12 d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-rts" onclick="uploadDoc('po')">
+                      <i class="bi bi-cloud-upload me-1"></i>Guardar OC
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            onclick="toggleUpload('po')">Cancelar</button>
+                    <span id="po-upload-status" class="ms-2 align-self-center" style="font-size:12px;"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Factura ─────────────────────────────── -->
+            <div class="col-sm-6">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-file-earmark-ruled me-1" style="color:#1d6f42;"></i>
+                Factura
+              </label>
+              <div class="input-group">
+                <select name="invoice_id" id="inv-select" class="form-select">
+                  <option value="">— Sin factura —</option>
+                  {% for inv in invoices %}
+                  <option value="{{ inv.id }}"
+                    {% if form.get('invoice_id', (asset.invoice_id|string if asset else '')) == inv.id|string %}selected{% endif %}>
+                    {{ inv.display }}
+                  </option>
+                  {% endfor %}
+                </select>
+                {% if asset and asset.invoice_id and asset.invoice and asset.invoice.file_path %}
+                <a href="{{ url_for('document_invoice_view', id=asset.invoice_id) }}"
+                   class="btn btn-outline-success" target="_blank" title="Ver archivo">
+                  <i class="bi bi-eye"></i>
+                </a>
+                {% endif %}
+                <button type="button" class="btn btn-outline-secondary" title="Subir nueva factura"
+                        onclick="toggleUpload('inv')">
+                  <i class="bi bi-upload"></i>
+                </button>
+              </div>
+              <!-- Upload inline Invoice -->
+              <div id="inv-upload-area" class="mt-2 p-3 border rounded" style="display:none;background:#f8fff9;">
+                <div class="fw-semibold mb-2" style="font-size:13px;">
+                  <i class="bi bi-upload me-1"></i>Subir nueva Factura
+                </div>
+                <div class="row g-2">
+                  <div class="col-sm-5">
+                    <input type="text" id="inv-number" class="form-control form-control-sm"
+                           placeholder="N° de factura *" required>
+                  </div>
+                  <div class="col-sm-4">
+                    <input type="date" id="inv-date" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-sm-3">
+                    <input type="text" id="inv-supplier" class="form-control form-control-sm"
+                           placeholder="Proveedor">
+                  </div>
+                  <div class="col-12">
+                    <input type="file" id="inv-file" class="form-control form-control-sm"
+                           accept=".pdf,.xml,.xlsx,.jpg,.jpeg,.png,.zip">
+                    <div class="form-text">PDF, XML, Excel, imagen — opcional</div>
+                  </div>
+                  <div class="col-12 d-flex gap-2">
+                    <button type="button" class="btn btn-sm" style="background:#1d6f42;color:#fff;"
+                            onclick="uploadDoc('inv')">
+                      <i class="bi bi-cloud-upload me-1"></i>Guardar Factura
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            onclick="toggleUpload('inv')">Cancelar</button>
+                    <span id="inv-upload-status" class="ms-2 align-self-center" style="font-size:12px;"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -336,5 +461,62 @@
       if (lbl) { lbl.classList.add('btn-primary','text-white'); lbl.classList.remove('btn-outline-secondary'); }
     }
   });
+
+  // ── OC / Factura inline upload ────────────────────────────
+  function toggleUpload(type) {
+    const area = document.getElementById(`${type}-upload-area`);
+    area.style.display = area.style.display === 'none' ? '' : 'none';
+  }
+
+  async function uploadDoc(type) {
+    const number   = document.getElementById(`${type}-number`).value.trim();
+    const date     = document.getElementById(`${type}-date`).value;
+    const supplier = document.getElementById(`${type}-supplier`).value.trim();
+    const fileEl   = document.getElementById(`${type}-file`);
+    const statusEl = document.getElementById(`${type}-upload-status`);
+    const select   = document.getElementById(`${type}-select`);
+
+    if (!number) {
+      statusEl.innerHTML = '<span class="text-danger">⚠ El número es obligatorio</span>';
+      return;
+    }
+    statusEl.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass-split"></i> Subiendo…</span>';
+
+    const url      = type === 'po' ? '/api/purchase-orders/upload' : '/api/invoices/upload';
+    const formData = new FormData();
+    formData.append('number', number);
+    formData.append('date',   date);
+    formData.append('supplier_name', supplier);
+    if (fileEl.files[0]) formData.append('file', fileEl.files[0]);
+
+    // Include CSRF token
+    const csrf = document.querySelector('input[name="csrf_token"]').value;
+    formData.append('csrf_token', csrf);
+
+    try {
+      const resp = await fetch(url, { method: 'POST', body: formData });
+      const data = await resp.json();
+      if (data.ok) {
+        // Add new option to select and select it
+        const opt = new Option(data.display, data.id, true, true);
+        select.add(opt);
+        select.value = data.id;
+        statusEl.innerHTML = '<span class="text-success">✓ Guardado y seleccionado</span>';
+        // Reset fields
+        document.getElementById(`${type}-number`).value   = '';
+        document.getElementById(`${type}-date`).value     = '';
+        document.getElementById(`${type}-supplier`).value = '';
+        fileEl.value = '';
+        setTimeout(() => {
+          toggleUpload(type);
+          statusEl.innerHTML = '';
+        }, 1500);
+      } else {
+        statusEl.innerHTML = `<span class="text-danger">⚠ ${data.error}</span>`;
+      }
+    } catch(e) {
+      statusEl.innerHTML = '<span class="text-danger">⚠ Error de conexión</span>';
+    }
+  }
 </script>
 {% endblock %}
