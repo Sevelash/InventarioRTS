@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
 
 {% block title %}{{ 'Editar' if client else 'Nuevo' }} Cliente — RTS{% endblock %}
 {% block page_title %}{{ 'Editar Cliente' if client else 'Nuevo Cliente' }}{% endblock %}
@@ -10,65 +11,224 @@
 {% endblock %}
 
 {% block content %}
+{% set lt = form.get('location_type', client.location_type if client else 'local') %}
+
+{{ breadcrumbs([('Clientes', url_for('clients_list')), (client.name if client else 'Nuevo', none)]) }}
+
 <div class="row justify-content-center">
-  <div class="col-lg-5">
-    <div class="card">
-      <div class="card-header">
-        <i class="bi bi-building me-2"></i>
-        {{ 'Editar: ' + client.name if client else 'Agregar cliente / empresa' }}
-      </div>
-      <div class="card-body">
-        <form method="post">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="col-lg-8">
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-          <div class="mb-3">
-            <label class="form-label">Nombre de la empresa <span class="text-danger">*</span></label>
-            <input type="text" name="name" class="form-control" required autofocus
-                   value="{{ form.get('name', client.name if client else '') }}"
-                   placeholder="Ej. Remote Team Solutions, Acme Corp…">
-          </div>
-
-          {% if client %}
-          <div class="mb-3">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="active" id="chk_active"
-                     {% if form.get('active', client.active) %}checked{% endif %}>
-              <label class="form-check-label" for="chk_active">Cliente activo</label>
+      <!-- ① Tipo de cliente ───────────────────────────────── -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-geo-alt me-2"></i>Tipo de Cliente</div>
+        <div class="card-body pb-2">
+          <div class="d-flex gap-3">
+            <div class="flex-fill">
+              <input type="radio" class="btn-check" name="location_type" id="lt_local"
+                     value="local" {% if lt == 'local' %}checked{% endif %}>
+              <label for="lt_local"
+                     class="btn btn-outline-secondary w-100 py-3 d-flex flex-column align-items-center gap-1">
+                <i class="bi bi-building" style="font-size:22px;"></i>
+                <span style="font-weight:600;">Local</span>
+                <small class="text-muted" style="font-size:11px;">Oficina / presencial</small>
+              </label>
             </div>
-            <div class="form-text">Los clientes inactivos no aparecen en el selector de activos.</div>
+            <div class="flex-fill">
+              <input type="radio" class="btn-check" name="location_type" id="lt_foraneo"
+                     value="foraneo" {% if lt == 'foraneo' %}checked{% endif %}>
+              <label for="lt_foraneo"
+                     class="btn btn-outline-warning w-100 py-3 d-flex flex-column align-items-center gap-1">
+                <i class="bi bi-truck" style="font-size:22px;"></i>
+                <span style="font-weight:600;">Foráneo</span>
+                <small class="text-muted" style="font-size:11px;">Remoto / envío de equipos</small>
+              </label>
+            </div>
           </div>
+        </div>
+      </div>
 
-          <!-- Activos asociados -->
+      <!-- ② Identificación ───────────────────────────────── -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-building me-2"></i>Datos de la Empresa</div>
+        <div class="card-body">
+          <div class="row g-3">
+
+            <div class="col-12">
+              <label class="form-label">Nombre de la empresa <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" required autofocus
+                     value="{{ form.get('name', client.name if client else '') }}"
+                     placeholder="Ej. Remote Team Solutions, Acme Corp…">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Giro / Industria</label>
+              <input type="text" name="industry" class="form-control"
+                     value="{{ form.get('industry', client.industry if client else '') }}"
+                     placeholder="Ej. Tecnología, Manufactura, Retail…">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">RFC / Tax ID</label>
+              <input type="text" name="rfc" class="form-control" style="font-family:monospace;"
+                     value="{{ form.get('rfc', client.rfc if client else '') }}"
+                     placeholder="Ej. ABC123456XYZ">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Sitio Web</label>
+              <input type="url" name="website" class="form-control"
+                     value="{{ form.get('website', client.website if client else '') }}"
+                     placeholder="https://www.empresa.com">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Fecha de inicio del cliente</label>
+              <input type="date" name="start_date" class="form-control"
+                     value="{{ form.get('start_date', client.start_date.strftime('%Y-%m-%d') if client and client.start_date else '') }}">
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ③ Contacto ──────────────────────────────────────── -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-person-lines-fill me-2"></i>Contacto Principal</div>
+        <div class="card-body">
+          <div class="row g-3">
+
+            <div class="col-sm-6">
+              <label class="form-label">Nombre del contacto</label>
+              <input type="text" name="contact_name" class="form-control"
+                     value="{{ form.get('contact_name', client.contact_name if client else '') }}"
+                     placeholder="Ej. Juan García">
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Teléfono</label>
+              <input type="text" name="phone" class="form-control"
+                     value="{{ form.get('phone', client.phone if client else '') }}"
+                     placeholder="Ej. +52 55 1234 5678">
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Correo electrónico</label>
+              <input type="email" name="email" class="form-control"
+                     value="{{ form.get('email', client.email if client else '') }}"
+                     placeholder="contacto@empresa.com">
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ④ Ubicación ─────────────────────────────────────── -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-pin-map me-2"></i>Ubicación</div>
+        <div class="card-body">
+          <div class="row g-3">
+
+            <div class="col-sm-4">
+              <label class="form-label">País</label>
+              <input type="text" name="country" class="form-control"
+                     value="{{ form.get('country', client.country if client else '') }}"
+                     placeholder="México">
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">Ciudad</label>
+              <input type="text" name="city" class="form-control"
+                     value="{{ form.get('city', client.city if client else '') }}"
+                     placeholder="Ciudad de México">
+            </div>
+
+            <div class="col-sm-4">
+              <label class="form-label">Dirección</label>
+              <input type="text" name="address" class="form-control"
+                     value="{{ form.get('address', client.address if client else '') }}"
+                     placeholder="Calle, Colonia, CP">
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ⑤ Notas ─────────────────────────────────────────── -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-chat-left-text me-2"></i>Notas</div>
+        <div class="card-body">
+          <textarea name="notes" class="form-control" rows="3"
+                    placeholder="Observaciones, acuerdos especiales, condiciones de servicio…">{{ form.get('notes', client.notes if client else '') }}</textarea>
+        </div>
+      </div>
+
+      {% if client %}
+      <!-- ⑥ Estado ─────────────────────────────────────────── -->
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-toggles me-2"></i>Estado</div>
+        <div class="card-body">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="active" id="chk_active"
+                   {% if form.get('active', client.active if client else True) %}checked{% endif %}>
+            <label class="form-check-label" for="chk_active">Cliente activo</label>
+          </div>
+          <div class="form-text">Los clientes inactivos no aparecen en selectores de nuevos activos.</div>
+
           {% if client.assets %}
-          <div class="mb-3">
-            <label class="form-label text-muted" style="font-size:12px;">
+          <hr>
+          <div class="mt-2">
+            <div class="text-muted mb-1" style="font-size:12px;text-transform:uppercase;font-weight:600;">
               Activos asociados ({{ client.assets|length }})
-            </label>
-            <div style="max-height:160px;overflow-y:auto;border:1px solid var(--rts-border);border-radius:7px;padding:8px 12px;">
+            </div>
+            <div style="max-height:150px;overflow-y:auto;border:1px solid var(--rts-border);border-radius:7px;padding:8px 12px;">
               {% for a in client.assets %}
-              <div class="d-flex align-items-center gap-2 py-1" style="font-size:12.5px;border-bottom:1px solid #f0f0f0;">
+              <div class="d-flex align-items-center gap-2 py-1 border-bottom" style="font-size:12.5px;">
                 <span class="asset-tag-badge">{{ a.asset_tag }}</span>
                 <span>{{ a.name }}</span>
+                <span class="ms-auto text-muted">{{ STATUS_LABELS[a.status] }}</span>
               </div>
               {% endfor %}
             </div>
           </div>
           {% endif %}
-          {% endif %}
-
-          <hr>
-          <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-rts px-4">
-              <i class="bi bi-check-lg me-1"></i>{{ 'Guardar Cambios' if client else 'Crear Cliente' }}
-            </button>
-            <a href="{{ url_for('clients_list') }}" class="btn btn-outline-secondary">
-              <i class="bi bi-arrow-left me-1"></i>Cancelar
-            </a>
-          </div>
-
-        </form>
+        </div>
       </div>
-    </div>
+      {% endif %}
+
+      <div class="d-flex gap-2 mb-4">
+        <button type="submit" class="btn btn-rts px-4">
+          <i class="bi bi-check-lg me-1"></i>{{ 'Guardar Cambios' if client else 'Crear Cliente' }}
+        </button>
+        <a href="{{ url_for('clients_list') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>Cancelar
+        </a>
+      </div>
+
+    </form>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Highlight selected location type button
+  document.querySelectorAll('input[name="location_type"]').forEach(r => {
+    const updateLabels = () => {
+      document.querySelectorAll('label[for^="lt_"]').forEach(l => {
+        l.style.borderWidth = '1px';
+        l.style.fontWeight  = '';
+      });
+      const lbl = document.querySelector(`label[for="${r.id}"]`);
+      if (r.checked && lbl) {
+        lbl.style.borderWidth = '2.5px';
+      }
+    };
+    r.addEventListener('change', updateLabels);
+    if (r.checked) {
+      document.querySelector(`label[for="${r.id}"]`).style.borderWidth = '2.5px';
+    }
+  });
+</script>
 {% endblock %}

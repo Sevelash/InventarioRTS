@@ -106,11 +106,34 @@ class Department(db.Model):
 
 class Client(db.Model):
     __tablename__ = 'clients'
-    id         = db.Column(db.Integer, primary_key=True)
-    name       = db.Column(db.String(150), nullable=False, unique=True)
-    active     = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    assets     = db.relationship('Asset', backref='client', lazy=True)
+    id           = db.Column(db.Integer, primary_key=True)
+    name         = db.Column(db.String(150), nullable=False, unique=True)
+    # Tipo de cliente
+    location_type = db.Column(db.String(10), nullable=False, default='local')  # local | foraneo
+    # Contacto
+    contact_name  = db.Column(db.String(150))
+    email         = db.Column(db.String(150))
+    phone         = db.Column(db.String(50))
+    # Ubicación
+    country       = db.Column(db.String(80))
+    city          = db.Column(db.String(80))
+    address       = db.Column(db.String(300))
+    # Datos fiscales / comerciales
+    rfc           = db.Column(db.String(20))          # RFC o Tax ID
+    industry      = db.Column(db.String(100))         # Giro/industria
+    website       = db.Column(db.String(200))
+    # Fechas
+    start_date    = db.Column(db.Date)                # Fecha de inicio del cliente
+    notes         = db.Column(db.Text)
+    active        = db.Column(db.Boolean, default=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    assets        = db.relationship('Asset', backref='client', lazy=True)
+
+    LOCATION_CHOICES = [('local', 'Local'), ('foraneo', 'Foráneo')]
+
+    @property
+    def location_label(self):
+        return 'Foráneo' if self.location_type == 'foraneo' else 'Local'
 
     def __repr__(self):
         return f'<Client {self.name}>'

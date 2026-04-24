@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}Importar Clientes — RTS{% endblock %}
+{% block page_title %}Importar Clientes desde Excel{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('clients_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([('Clientes', url_for('clients_list')), ('Importar Excel', none)]) }}
+
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+
+    <!-- Upload card -->
+    <div class="card mb-3">
+      <div class="card-header">
+        <i class="bi bi-file-earmark-excel me-2" style="color:#1d6f42;"></i>
+        Importar desde Excel (.xlsx)
+      </div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Seleccionar archivo</label>
+            <input type="file" name="excel_file" class="form-control"
+                   accept=".xlsx,.xls" required>
+            <div class="form-text">Formatos aceptados: .xlsx, .xls</div>
+          </div>
+
+          <div class="alert alert-info d-flex gap-2 py-2 mb-3" style="font-size:13px;">
+            <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+            <div>
+              <strong>Comportamiento de la importación:</strong><br>
+              • Si el cliente ya existe (mismo nombre), <strong>se actualiza</strong> con los datos del Excel.<br>
+              • Si es nuevo, <strong>se crea</strong> automáticamente.<br>
+              • Las filas sin nombre se omiten.
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-rts">
+            <i class="bi bi-upload me-1"></i>Importar Clientes
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Formato esperado -->
+    <div class="card mb-3">
+      <div class="card-header">
+        <i class="bi bi-table me-2"></i>Formato esperado del Excel
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0" style="font-size:12.5px;">
+            <thead class="table-light">
+              <tr>
+                <th class="ps-3">Columna</th>
+                <th>Ejemplo</th>
+                <th>Requerido</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="ps-3"><code>Nombre</code> <em>o</em> <code>Name</code></td>
+                <td>Remote Team Solutions</td>
+                <td><span class="badge bg-danger">Sí</span></td>
+              </tr>
+              <tr>
+                <td class="ps-3"><code>Tipo</code> <em>o</em> <code>Location</code></td>
+                <td>local &nbsp;/&nbsp; foraneo</td>
+                <td><span class="badge bg-secondary">No</span></td>
+              </tr>
+              <tr>
+                <td class="ps-3"><code>Contacto</code></td>
+                <td>Juan García</td>
+                <td><span class="badge bg-secondary">No</span></td>
+              </tr>
+              <tr>
+                <td class="ps-3"><code>Email</code> <em>o</em> <code>Correo</code></td>
+                <td>juan@empresa.com</td>
+                <td><span class="badge bg-secondary">No</span></td>
+              </tr>
+              <tr>
+                <td class="ps-3"><code>Telefono</code> <em>o</em> <code>Tel</code></td>
+                <td>+52 55 1234 5678</td>
+                <td><span class="badge bg-secondary">No</span></td>
+              </tr>
+              <tr>
+                <td class="ps-3"><code>Pais</code> <em>o</em> <code>Country</code></td>
+                <td>México</td>
+                <td><span class="badge bg-secondary">No</span></td>
+              </tr>
+              <tr>
+                <td class="ps-3"><code>Ciudad</code> <em>o</em> <code>City</code></td>
+                <td>Ciudad de México</td>
+                <td><span class="badge bg-secondary">No</span></td>
+              </tr>
+              <tr>
+                <td class="ps-3"><code>RFC</code> <em>o</em> <code>Tax</code></td>
+                <td>ABC123456XYZ</td>
+                <td><span class="badge bg-secondary">No</span></td>
+              </tr>
+              <tr>
+                <td class="ps-3"><code>Giro</code> <em>o</em> <code>Industry</code></td>
+                <td>Tecnología</td>
+                <td><span class="badge bg-secondary">No</span></td>
+              </tr>
+              <tr>
+                <td class="ps-3"><code>Web</code> <em>o</em> <code>Website</code></td>
+                <td>https://empresa.com</td>
+                <td><span class="badge bg-secondary">No</span></td>
+              </tr>
+              <tr>
+                <td class="ps-3"><code>Fecha</code> <em>o</em> <code>Inicio</code></td>
+                <td>01/01/2024</td>
+                <td><span class="badge bg-secondary">No</span></td>
+              </tr>
+              <tr>
+                <td class="ps-3 pb-3"><code>Notas</code></td>
+                <td>Observaciones del cliente</td>
+                <td><span class="badge bg-secondary">No</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Descargar plantilla -->
+    <div class="card">
+      <div class="card-body d-flex align-items-center gap-3 py-3">
+        <i class="bi bi-download" style="font-size:24px;color:#1d6f42;"></i>
+        <div>
+          <div class="fw-semibold">¿No tienes el formato?</div>
+          <div class="text-muted" style="font-size:12.5px;">
+            Crea un archivo Excel con las columnas de la tabla de arriba.
+            La primera fila debe ser el encabezado.
+          </div>
+        </div>
+        <a href="{{ url_for('client_import_template') }}" class="btn btn-outline-success btn-sm ms-auto">
+          <i class="bi bi-file-earmark-excel me-1"></i>Descargar plantilla
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

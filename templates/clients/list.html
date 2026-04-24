@@ -1,45 +1,81 @@
 {% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
 
 {% block title %}Clientes — RTS Asset Management{% endblock %}
 {% block page_title %}Clientes / Empresas{% endblock %}
 
 {% block topbar_actions %}
+  <a href="{{ url_for('client_import') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-file-earmark-excel me-1"></i>Importar Excel
+  </a>
   <a href="{{ url_for('client_new') }}" class="btn btn-rts btn-sm">
     <i class="bi bi-plus-lg me-1"></i>Nuevo Cliente
   </a>
 {% endblock %}
 
 {% block content %}
+{{ breadcrumbs([('Clientes', none)]) }}
 
-<!-- Buscador -->
+<!-- Buscador + filtros -->
 <div class="card mb-3">
   <div class="card-body py-2">
-    <form method="get" class="d-flex gap-2 align-items-center">
-      <div class="input-group input-group-sm" style="max-width:320px;">
+    <form method="get" class="d-flex flex-wrap gap-2 align-items-center">
+
+      <div class="input-group input-group-sm" style="max-width:300px;">
         <span class="input-group-text"><i class="bi bi-search"></i></span>
-        <input type="text" name="q" class="form-control" placeholder="Buscar cliente…"
+        <input type="text" name="q" class="form-control" placeholder="Empresa, contacto, ciudad…"
                value="{{ q }}" autocomplete="off">
-        {% if q %}
-        <button type="button" class="btn btn-outline-secondary btn-sm"
-                onclick="this.previousElementSibling.value='';this.closest('form').submit();">
-          <i class="bi bi-x"></i>
-        </button>
-        {% endif %}
       </div>
+
+      <select name="location_type" class="form-select form-select-sm" style="max-width:160px;"
+              onchange="this.form.submit()">
+        <option value="">Todos los tipos</option>
+        <option value="local"   {% if loc_filter=='local'   %}selected{% endif %}>🏢 Local</option>
+        <option value="foraneo" {% if loc_filter=='foraneo' %}selected{% endif %}>🚚 Foráneo</option>
+      </select>
+
       <button type="submit" class="btn btn-primary btn-sm">Buscar</button>
-      {% if q %}
+      {% if q or loc_filter %}
       <a href="{{ url_for('clients_list') }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-x-circle me-1"></i>Limpiar
       </a>
       {% endif %}
+
     </form>
   </div>
 </div>
 
-<!-- Tabla -->
+<!-- Contadores rápidos -->
+{% set locals   = clients | selectattr('location_type','equalto','local')   | list %}
+{% set foraneos = clients | selectattr('location_type','equalto','foraneo') | list %}
+<div class="row g-2 mb-3">
+  <div class="col-sm-4">
+    <div class="card border-0 shadow-sm text-center py-2">
+      <div style="font-size:22px;font-weight:700;color:var(--rts-navy);">{{ clients|length }}</div>
+      <div class="text-muted" style="font-size:11px;text-transform:uppercase;">Total</div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card border-0 shadow-sm text-center py-2">
+      <div style="font-size:22px;font-weight:700;color:#0a3d62;">{{ locals|length }}</div>
+      <div class="text-muted" style="font-size:11px;text-transform:uppercase;">🏢 Locales</div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card border-0 shadow-sm text-center py-2">
+      <div style="font-size:22px;font-weight:700;color:#856404;">{{ foraneos|length }}</div>
+      <div class="text-muted" style="font-size:11px;text-transform:uppercase;">🚚 Foráneos</div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla principal -->
 <div class="card">
   <div class="card-header d-flex align-items-center justify-content-between">
     <span><i class="bi bi-building me-2"></i>{{ clients|length }} cliente(s)</span>
+    <a href="{{ url_for('client_import') }}" class="btn btn-sm btn-outline-success">
+      <i class="bi bi-file-earmark-excel me-1"></i>Importar Excel
+    </a>
   </div>
   <div class="card-body p-0">
     {% if clients %}
@@ -47,19 +83,69 @@
       <table class="table table-hover mb-0" style="font-size:13.5px;">
         <thead>
           <tr>
-            <th class="ps-3">Empresa / Cliente</th>
-            <th style="width:80px;">Activos</th>
-            <th style="width:90px;">Estado</th>
-            <th style="width:110px;">Creado</th>
-            <th class="text-end pe-3" style="width:110px;">Acciones</th>
+            <th class="ps-3">Empresa</th>
+            <th>Tipo</th>
+            <th>Contacto</th>
+            <th>Ubicación</th>
+            <th>Inicio</th>
+            <th style="width:70px;">Activos</th>
+            <th style="width:80px;">Estado</th>
+            <th class="text-end pe-3" style="width:100px;">Acciones</th>
           </tr>
         </thead>
         <tbody>
           {% for cli in clients %}
           <tr>
-            <td class="ps-3 fw-semibold">
-              <i class="bi bi-building me-2" style="color:var(--rts-blue);"></i>{{ cli.name }}
+            <td class="ps-3">
+              <div class="fw-semibold">{{ cli.name }}</div>
+              {% if cli.industry %}
+              <div class="text-muted" style="font-size:11.5px;">{{ cli.industry }}</div>
+              {% endif %}
             </td>
+
+            <td>
+              {% if cli.location_type == 'foraneo' %}
+                <span class="badge" style="background:#856404;color:#fff;">
+                  <i class="bi bi-truck me-1"></i>Foráneo
+                </span>
+              {% else %}
+                <span class="badge" style="background:#0a3d62;color:#fff;">
+                  <i class="bi bi-building me-1"></i>Local
+                </span>
+              {% endif %}
+            </td>
+
+            <td>
+              {% if cli.contact_name %}
+              <div>{{ cli.contact_name }}</div>
+              {% endif %}
+              {% if cli.email %}
+              <div style="font-size:11.5px;">
+                <a href="mailto:{{ cli.email }}" class="text-muted">{{ cli.email }}</a>
+              </div>
+              {% endif %}
+              {% if cli.phone %}
+              <div style="font-size:11.5px;color:var(--rts-gray);">
+                <i class="bi bi-telephone me-1"></i>{{ cli.phone }}
+              </div>
+              {% endif %}
+              {% if not cli.contact_name and not cli.email and not cli.phone %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <td style="font-size:12px;">
+              {% if cli.city or cli.country %}
+                {{ cli.city }}{% if cli.city and cli.country %}, {% endif %}{{ cli.country }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <td style="font-size:12px;color:var(--rts-gray);">
+              {{ cli.start_date.strftime('%d/%m/%Y') if cli.start_date else '—' }}
+            </td>
+
             <td>
               {% set count = cli.assets|length %}
               {% if count %}
@@ -69,6 +155,7 @@
                 <span class="text-muted">0</span>
               {% endif %}
             </td>
+
             <td>
               {% if cli.active %}
                 <span class="badge bg-success">Activo</span>
@@ -76,9 +163,7 @@
                 <span class="badge bg-secondary">Inactivo</span>
               {% endif %}
             </td>
-            <td style="font-size:12px;color:var(--rts-gray);">
-              {{ cli.created_at.strftime('%d/%m/%Y') if cli.created_at else '—' }}
-            </td>
+
             <td class="text-end pe-3" style="white-space:nowrap;">
               <a href="{{ url_for('client_edit', id=cli.id) }}"
                  class="btn btn-sm btn-outline-secondary py-0 px-2" title="Editar">
@@ -103,10 +188,16 @@
     <div class="empty-state">
       <i class="bi bi-building"></i>
       <p>No se encontraron clientes{% if q %} para "<strong>{{ q }}</strong>"{% endif %}.</p>
-      <a href="{{ url_for('client_new') }}" class="btn btn-rts btn-sm">Agregar primer cliente</a>
+      <div class="d-flex gap-2 justify-content-center mt-2">
+        <a href="{{ url_for('client_new') }}" class="btn btn-rts btn-sm">
+          <i class="bi bi-plus-lg me-1"></i>Agregar cliente
+        </a>
+        <a href="{{ url_for('client_import') }}" class="btn btn-outline-success btn-sm">
+          <i class="bi bi-file-earmark-excel me-1"></i>Importar Excel
+        </a>
+      </div>
     </div>
     {% endif %}
   </div>
 </div>
-
 {% endblock %}

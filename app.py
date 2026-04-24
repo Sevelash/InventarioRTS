@@ -162,6 +162,18 @@ with app.app_context():
     # brand_id on assets
     _add_col_if_missing('assets', 'brand_id', 'INTEGER')
 
+    # Extended client fields
+    for col, typ in [
+        ('location_type', "VARCHAR(10) NOT NULL DEFAULT 'local'"),
+        ('contact_name',  'VARCHAR(150)'), ('email',    'VARCHAR(150)'),
+        ('phone',         'VARCHAR(50)'),  ('country',  'VARCHAR(80)'),
+        ('city',          'VARCHAR(80)'),  ('address',  'VARCHAR(300)'),
+        ('rfc',           'VARCHAR(20)'),  ('industry', 'VARCHAR(100)'),
+        ('website',       'VARCHAR(200)'), ('start_date','DATE'),
+        ('notes',         'TEXT'),
+    ]:
+        _add_col_if_missing('clients', col, typ)
+
     # Seed IT department if none exist
     from models import Department
     if Department.query.count() == 0:
@@ -1094,30 +1106,67 @@ def shipments_refresh_all():
 @app.route('/clients')
 @login_required
 def clients_list():
-    q       = request.args.get('q', '')
-    clients = Client.query
+    q            = request.args.get('q', '')
+    loc_filter   = request.args.get('location_type', '')
+    clients_q    = Client.query
     if q:
-        clients = clients.filter(Client.name.ilike(f'%{q}%'))
-    clients = clients.order_by(Client.name).all()
-    return render_template('clients/list.html', clients=clients, q=q)
+        clients_q = clients_q.filter(db.or_(
+            Client.name.ilike(f'%{q}%'),
+            Client.contact_name.ilike(f'%{q}%'),
+            Client.email.ilike(f'%{q}%'),
+            Client.country.ilike(f'%{q}%'),
+            Client.city.ilike(f'%{q}%'),
+        ))
+    if loc_filter:
+        clients_q = clients_q.filter_by(location_type=loc_filter)
+    clients = clients_q.order_by(Client.name).all()
+    return render_template('clients/list.html', clients=clients, q=q, loc_filter=loc_filter)
+
+
+def _save_client_form(cli, form):
+    """Read form fields into a Client object. Returns list of validation errors."""
+    errors = []
+    name = form.get('name', '').strip()
+    if not name:
+        errors.append('El nombre del cliente es obligatorio.')
+        return errors
+    duplicate = Client.query.filter_by(name=name).first()
+    if duplicate and duplicate.id != getattr(cli, 'id', None):
+        errors.append(f'El cliente "{name}" ya existe.')
+        return errors
+    cli.name          = name
+    cli.location_type = form.get('location_type', 'local')
+    cli.contact_name  = form.get('contact_name', '').strip() or None
+    cli.email         = form.get('email', '').strip() or None
+    cli.phone         = form.get('phone', '').strip() or None
+    cli.country       = form.get('country', '').strip() or None
+    cli.city          = form.get('city', '').strip() or None
+    cli.address       = form.get('address', '').strip() or None
+    cli.rfc           = form.get('rfc', '').strip() or None
+    cli.industry      = form.get('industry', '').strip() or None
+    cli.website       = form.get('website', '').strip() or None
+    cli.notes         = form.get('notes', '').strip() or None
+    cli.start_date    = parse_date(form.get('start_date'))
+    if hasattr(cli, 'id') and cli.id:   # edit only
+        cli.active    = 'active' in form
+    return errors
 
 
 @app.route('/clients/new', methods=['GET', 'POST'])
 @login_required
 def client_new():
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        if not name:
-            flash('El nombre del cliente es obligatorio.', 'danger')
+        cli    = Client(active=True)
+        errors = _save_client_form(cli, request.form)
+        if errors:
+            for e in errors:
+                flash(e, 'danger')
             return render_template('clients/form.html', client=None, form=request.form)
-        if Client.query.filter_by(name=name).first():
-            flash(f'El cliente "{name}" ya existe.', 'danger')
-            return render_template('clients/form.html', client=None, form=request.form)
-        cli = Client(name=name, active=True)
         db.session.add(cli)
-        log_action('create', 'client', entity_name=name, details=f'Cliente creado: {name}')
+        log_action('create', 'client', entity_name=cli.name,
+                   details=f'Cliente {cli.location_type}: {cli.name}')
         db.session.commit()
-        flash(f'Cliente "{name}" creado correctamente.', 'success')
+        flash(f'Cliente "{cli.name}" creado correctamente.', 'success')
         return redirect(url_for('clients_list'))
     return render_template('clients/form.html', client=None, form={})
 
@@ -1127,19 +1176,13 @@ def client_new():
 def client_edit(id):
     cli = Client.query.get_or_404(id)
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        if not name:
-            flash('El nombre del cliente es obligatorio.', 'danger')
+        errors = _save_client_form(cli, request.form)
+        if errors:
+            for e in errors:
+                flash(e, 'danger')
             return render_template('clients/form.html', client=cli, form=request.form)
-        existing = Client.query.filter_by(name=name).first()
-        if existing and existing.id != cli.id:
-            flash(f'El cliente "{name}" ya existe.', 'danger')
-            return render_template('clients/form.html', client=cli, form=request.form)
-        old_name  = cli.name
-        cli.name   = name
-        cli.active = 'active' in request.form
-        log_action('update', 'client', entity_id=cli.id, entity_name=name,
-                   details=f'Renombrado: {old_name} → {name}' if old_name != name else 'Actualizado')
+        log_action('update', 'client', entity_id=cli.id, entity_name=cli.name,
+                   details='Datos actualizados')
         db.session.commit()
         flash(f'Cliente "{cli.name}" actualizado.', 'success')
         return redirect(url_for('clients_list'))
@@ -1154,12 +1197,154 @@ def client_delete(id):
         flash(f'No se puede eliminar "{cli.name}": tiene activos asociados.', 'danger')
         return redirect(url_for('clients_list'))
     name = cli.name
-    log_action('delete', 'client', entity_id=cli.id, entity_name=name,
-               details=f'Cliente eliminado: {name}')
+    log_action('delete', 'client', entity_id=cli.id, entity_name=name)
     db.session.delete(cli)
     db.session.commit()
     flash(f'Cliente "{name}" eliminado.', 'warning')
     return redirect(url_for('clients_list'))
+
+
+@app.route('/clients/import', methods=['GET', 'POST'])
+@login_required
+def client_import():
+    """Import clients from an Excel file (.xlsx)."""
+    if request.method == 'POST':
+        f = request.files.get('excel_file')
+        if not f or not f.filename.endswith(('.xlsx', '.xls')):
+            flash('Selecciona un archivo Excel (.xlsx)', 'danger')
+            return redirect(url_for('client_import'))
+        try:
+            import pandas as pd
+            df = pd.read_excel(f, dtype=str)
+            df.columns = [c.strip().lower().replace(' ', '_') for c in df.columns]
+            required = {'nombre', 'name'}
+            name_col = next((c for c in df.columns if c in required or 'nombre' in c or 'name' in c), None)
+            if not name_col:
+                flash('El archivo debe tener una columna "Nombre" o "Name".', 'danger')
+                return redirect(url_for('client_import'))
+
+            # Column aliases
+            def _col(aliases):
+                for a in aliases:
+                    c = next((c for c in df.columns if a in c), None)
+                    if c:
+                        return c
+                return None
+
+            col_map = {
+                'name':          name_col,
+                'location_type': _col(['tipo', 'location', 'local', 'foraneo']),
+                'contact_name':  _col(['contacto', 'contact']),
+                'email':         _col(['email', 'correo']),
+                'phone':         _col(['telefono', 'phone', 'tel']),
+                'country':       _col(['pais', 'country']),
+                'city':          _col(['ciudad', 'city']),
+                'address':       _col(['direccion', 'address']),
+                'rfc':           _col(['rfc', 'tax']),
+                'industry':      _col(['giro', 'industry', 'sector']),
+                'website':       _col(['web', 'website', 'url']),
+                'start_date':    _col(['fecha', 'start', 'inicio']),
+                'notes':         _col(['notas', 'notes', 'observ']),
+            }
+
+            created = updated = skipped = 0
+            for _, row in df.iterrows():
+                raw_name = str(row.get(col_map['name'], '') or '').strip()
+                if not raw_name or raw_name.lower() == 'nan':
+                    skipped += 1
+                    continue
+
+                def _v(field):
+                    col = col_map.get(field)
+                    if not col:
+                        return None
+                    val = str(row.get(col, '') or '').strip()
+                    return None if val.lower() in ('', 'nan', 'none') else val
+
+                # Normalise location_type
+                loc_raw = (_v('location_type') or 'local').lower()
+                loc = 'foraneo' if any(x in loc_raw for x in ['foraneo', 'foráneo', 'remote', 'remoto']) else 'local'
+
+                # Start date
+                start_d = None
+                sd_str  = _v('start_date')
+                if sd_str:
+                    try:
+                        import pandas as _pd
+                        start_d = _pd.to_datetime(sd_str, dayfirst=True).date()
+                    except Exception:
+                        pass
+
+                existing = Client.query.filter_by(name=raw_name).first()
+                if existing:
+                    existing.location_type = loc
+                    if _v('contact_name'): existing.contact_name = _v('contact_name')
+                    if _v('email'):        existing.email        = _v('email')
+                    if _v('phone'):        existing.phone        = _v('phone')
+                    if _v('country'):      existing.country      = _v('country')
+                    if _v('city'):         existing.city         = _v('city')
+                    if _v('address'):      existing.address      = _v('address')
+                    if _v('rfc'):          existing.rfc          = _v('rfc')
+                    if _v('industry'):     existing.industry     = _v('industry')
+                    if _v('website'):      existing.website      = _v('website')
+                    if _v('notes'):        existing.notes        = _v('notes')
+                    if start_d:            existing.start_date   = start_d
+                    updated += 1
+                else:
+                    cli = Client(
+                        name=raw_name, active=True,
+                        location_type=loc,
+                        contact_name=_v('contact_name'),
+                        email=_v('email'), phone=_v('phone'),
+                        country=_v('country'), city=_v('city'),
+                        address=_v('address'), rfc=_v('rfc'),
+                        industry=_v('industry'), website=_v('website'),
+                        notes=_v('notes'), start_date=start_d,
+                    )
+                    db.session.add(cli)
+                    created += 1
+
+            db.session.commit()
+            log_action('import', 'client', details=f'Excel import: {created} creados, {updated} actualizados, {skipped} omitidos')
+            flash(f'Importación completada: {created} nuevos, {updated} actualizados, {skipped} omitidos.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al procesar el archivo: {e}', 'danger')
+        return redirect(url_for('clients_list'))
+
+    return render_template('clients/import.html')
+
+
+@app.route('/clients/import/template')
+@login_required
+def client_import_template():
+    """Download an Excel template for client import."""
+    import io
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Clientes'
+    headers = ['Nombre', 'Tipo', 'Contacto', 'Email', 'Telefono',
+               'Pais', 'Ciudad', 'Direccion', 'RFC', 'Giro', 'Web', 'Fecha', 'Notas']
+    example = ['Remote Team Solutions', 'foraneo', 'Juan García', 'juan@rts.com',
+               '+52 55 1234 5678', 'México', 'CDMX', 'Insurgentes 123', 'ABC123456XYZ',
+               'Tecnología', 'https://rts.com', '01/01/2024', 'Cliente prioritario']
+    header_fill = PatternFill('solid', fgColor='1D6F42')
+    header_font = Font(bold=True, color='FFFFFF')
+    for col, (h, ex) in enumerate(zip(headers, example), start=1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = header_font
+        c.fill = header_fill
+        c.alignment = Alignment(horizontal='center')
+        ws.column_dimensions[c.column_letter].width = max(len(h), len(str(ex))) + 4
+        ws.cell(row=2, column=col, value=ex)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(buf, as_attachment=True,
+                     download_name='plantilla_clientes.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
 # ── Template filters & context ────────────────────────────────────────────────
