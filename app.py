@@ -646,6 +646,58 @@ def inventory_dashboard():
 
     active_dept = Department.query.get(dept_filter) if dept_filter else None
 
+    # ── Panel Monetario ───────────────────────────────────────────────────────
+    from offboarding_pdf import calc_depreciation
+
+    # Todos los activos con costo (excluye retired/disposed del valor actual)
+    assets_with_cost = _asset_q().filter(Asset.purchase_cost != None).all()  # noqa: E711
+
+    # Total invertido (costo histórico)
+    total_invested = sum(a.purchase_cost or 0 for a in assets_with_cost)
+
+    # Valor actual (con depreciación SAT) — solo activos no retirados
+    active_assets_cost = [a for a in assets_with_cost
+                          if a.status not in ('retired', 'disposed')]
+    total_current_value = sum(
+        calc_depreciation(a.purchase_cost, a.purchase_date, a.asset_type or 'otro')['current_value']
+        for a in active_assets_cost
+    )
+
+    # Gasto en licencias
+    from models import License
+    total_licenses_cost = db.session.query(
+        db.func.coalesce(db.func.sum(License.purchase_cost), 0)
+    ).filter(License.status == 'active').scalar() or 0.0
+
+    # Gasto por categoría (top 6)
+    cost_by_category = db.session.query(
+        Category.name,
+        db.func.coalesce(db.func.sum(Asset.purchase_cost), 0).label('total')
+    ).join(Asset, Asset.category_id == Category.id
+    ).filter(Asset.purchase_cost != None  # noqa: E711
+    ).group_by(Category.name
+    ).order_by(db.desc('total')).limit(6).all()
+
+    # Gasto por cliente (top 6)
+    cost_by_client = db.session.query(
+        Client.name,
+        db.func.coalesce(db.func.sum(Asset.purchase_cost), 0).label('total')
+    ).join(Asset, Asset.client_id == Client.id
+    ).filter(Asset.purchase_cost != None  # noqa: E711
+    ).group_by(Client.name
+    ).order_by(db.desc('total')).limit(6).all()
+
+    # Top 5 activos más costosos (activos activos)
+    top_assets_by_cost = _asset_q().filter(
+        Asset.purchase_cost != None,  # noqa: E711
+        Asset.status.notin_(['retired', 'disposed'])
+    ).order_by(Asset.purchase_cost.desc()).limit(5).all()
+
+    # Activos sin costo registrado
+    assets_no_cost = _asset_q().filter(
+        db.or_(Asset.purchase_cost == None, Asset.purchase_cost == 0)  # noqa: E711
+    ).count()
+
     # Warranty expiry alerts (30 / 60 days)
     soon_30 = date.today() + timedelta(days=30)
     soon_60 = date.today() + timedelta(days=60)
@@ -672,7 +724,14 @@ def inventory_dashboard():
                            warranty_expiring=warranty_expiring,
                            soon_30=soon_30,
                            client_employee_counts=client_employee_counts,
-                           departments=Department.query.filter_by(active=True).order_by(Department.name).all())
+                           departments=Department.query.filter_by(active=True).order_by(Department.name).all(),
+                           total_invested=total_invested,
+                           total_current_value=total_current_value,
+                           total_licenses_cost=total_licenses_cost,
+                           cost_by_category=cost_by_category,
+                           cost_by_client=cost_by_client,
+                           top_assets_by_cost=top_assets_by_cost,
+                           assets_no_cost=assets_no_cost)
 
 
 # ── Assets ────────────────────────────────────────────────────────────────────

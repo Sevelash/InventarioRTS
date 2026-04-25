@@ -223,6 +223,151 @@
   </div>
   {% endif %}
 
+  <!-- Fila 3: Panel Monetario -->
+  <div style="border-top:1px solid var(--rts-border);padding-top:14px;margin-top:4px;">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--rts-gray);
+                font-weight:700;margin-bottom:12px;font-family:'Aptos','Calibri',sans-serif;">
+      <i class="bi bi-currency-dollar me-1"></i>Resumen Financiero
+    </div>
+
+    <!-- KPIs monetarios -->
+    <div class="row g-3 mb-3">
+      <div class="col-sm-6 col-lg-3">
+        <div class="stat-card" style="border-left:3px solid var(--rts-navy);">
+          <div class="stat-icon" style="background:#E8F0FA;">
+            <i class="bi bi-cash-stack" style="color:var(--rts-navy);"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="font-size:18px;">
+              ${{ '{:,.0f}'.format(total_invested) }}
+            </div>
+            <div class="stat-label">Total Invertido (MXN)</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="stat-card" style="border-left:3px solid #28a745;">
+          <div class="stat-icon" style="background:#E6F9F0;">
+            <i class="bi bi-graph-up-arrow" style="color:#28a745;"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="font-size:18px;color:#28a745;">
+              ${{ '{:,.0f}'.format(total_current_value) }}
+            </div>
+            <div class="stat-label">Valor Actual (deprec. SAT)</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="stat-card" style="border-left:3px solid #7C3AED;">
+          <div class="stat-icon" style="background:#F3E5F5;">
+            <i class="bi bi-key" style="color:#7C3AED;"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="font-size:18px;color:#7C3AED;">
+              ${{ '{:,.0f}'.format(total_licenses_cost) }}
+            </div>
+            <div class="stat-label">Gasto en Licencias (MXN)</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="stat-card" style="border-left:3px solid {% if total_invested > 0 %}#E65100{% else %}var(--rts-gray){% endif %};">
+          <div class="stat-icon" style="background:#FFF3E0;">
+            <i class="bi bi-percent" style="color:#E65100;"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="font-size:18px;color:#E65100;">
+              {% if total_invested > 0 %}
+                {{ '{:.1f}'.format(total_current_value / total_invested * 100) }}%
+              {% else %}—{% endif %}
+            </div>
+            <div class="stat-label">Valor Retenido</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tablas: Por Categoría y Por Cliente + Top Activos -->
+    <div class="row g-3">
+
+      <!-- Gasto por Categoría -->
+      {% if cost_by_category %}
+      <div class="col-lg-4">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+                    color:var(--rts-gray);margin-bottom:8px;">Por Categoría</div>
+        {% set max_cat = cost_by_category[0][1] if cost_by_category else 1 %}
+        {% for name, total in cost_by_category %}
+        <div class="mb-2">
+          <div class="d-flex justify-content-between" style="font-size:12px;margin-bottom:3px;">
+            <span style="font-weight:600;color:var(--rts-navy);">{{ name }}</span>
+            <span style="color:var(--rts-gray);">${{ '{:,.0f}'.format(total) }}</span>
+          </div>
+          <div style="height:6px;background:#E8EAED;border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:{{ (total/max_cat*100)|round|int }}%;
+                        background:var(--rts-navy);border-radius:4px;transition:width .4s;"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Gasto por Cliente -->
+      {% if cost_by_client %}
+      <div class="col-lg-4">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+                    color:var(--rts-gray);margin-bottom:8px;">Por Cliente</div>
+        {% set max_cli = cost_by_client[0][1] if cost_by_client else 1 %}
+        {% for name, total in cost_by_client %}
+        <div class="mb-2">
+          <div class="d-flex justify-content-between" style="font-size:12px;margin-bottom:3px;">
+            <span style="font-weight:600;color:var(--rts-navy);">{{ name }}</span>
+            <span style="color:var(--rts-gray);">${{ '{:,.0f}'.format(total) }}</span>
+          </div>
+          <div style="height:6px;background:#E8EAED;border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:{{ (total/max_cli*100)|round|int }}%;
+                        background:#089ACF;border-radius:4px;transition:width .4s;"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Top 5 activos más costosos -->
+      {% if top_assets_by_cost %}
+      <div class="col-lg-4">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+                    color:var(--rts-gray);margin-bottom:8px;">Top 5 Activos por Costo</div>
+        {% for a in top_assets_by_cost %}
+        <a href="{{ url_for('asset_detail', id=a.id) }}" class="text-decoration-none">
+          <div class="d-flex align-items-center gap-2 mb-2 p-2 rounded"
+               style="background:#F8F9FA;transition:background .15s;"
+               onmouseover="this.style.background='#E8F3FA'"
+               onmouseout="this.style.background='#F8F9FA'">
+            <span class="badge bg-light text-dark border" style="font-size:10px;white-space:nowrap;">
+              {{ a.asset_tag }}
+            </span>
+            <span style="font-size:12px;color:var(--rts-navy);font-weight:600;flex:1;
+                         overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              {{ a.name }}
+            </span>
+            <span style="font-size:12px;color:#28a745;font-weight:700;white-space:nowrap;">
+              ${{ '{:,.0f}'.format(a.purchase_cost) }}
+            </span>
+          </div>
+        </a>
+        {% endfor %}
+        {% if assets_no_cost > 0 %}
+        <div style="font-size:11px;color:var(--rts-gray);margin-top:4px;">
+          <i class="bi bi-info-circle me-1"></i>{{ assets_no_cost }} activo(s) sin costo registrado
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
 </div>
 
 <!-- Warranty expiry alert banner -->
