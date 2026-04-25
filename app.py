@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
-from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action, ALL_MODULES, Department, AccessRequest, Supplier, Brand, IDConfig, PurchaseOrder, Invoice, Maintenance, License, LicenseAssignment, AppSetting
+from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action, ALL_MODULES, Department, AccessRequest, Supplier, Brand, IDConfig, PurchaseOrder, Invoice, Maintenance, License, LicenseAssignment, AppSetting, Evaluation, EvaluationGoal, EvaluationCompetency
 from datetime import datetime, date, timedelta
 from i18n import get_translations, SUPPORTED_LANGS, DEFAULT_LANG
 import os
@@ -24,7 +24,11 @@ app.config['SECRET_KEY'] = _secret
 
 # Default: siempre apunta a instance/rts_inventory.db relativo al directorio del script
 _default_db = 'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'rts_inventory.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', _default_db)
+_db_url = os.environ.get('DATABASE_URL', _default_db)
+# Azure / Heroku usan "postgres://" pero SQLAlchemy requiere "postgresql://"
+if _db_url.startswith('postgres://'):
+    _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # ── Session security ──────────────────────────────────────────────────────
@@ -39,7 +43,7 @@ limiter.init_app(app)
 
 db.init_app(app)
 
-# ── Búsqueda sin tildes: función SQLite personalizada ─────────────────────────
+# ── Búsqueda sin tildes ───────────────────────────────────────────────────────
 import unicodedata as _ucd
 from sqlalchemy import event as _sa_event
 from sqlalchemy.engine import Engine as _Engine
@@ -55,11 +59,21 @@ def _nrm(text):
 
 @_sa_event.listens_for(_Engine, 'connect')
 def _register_sqlite_nrm(dbapi_conn, _rec):
-    """Registra nrm() en cada conexión SQLite nueva."""
+    """Registra nrm() en cada conexión SQLite nueva (no aplica a PostgreSQL)."""
     try:
         dbapi_conn.create_function('nrm', 1, _nrm)
     except Exception:
-        pass
+        pass  # PostgreSQL u otro dialecto — se ignora
+
+def _search_col(col, nq):
+    """Expresión LIKE para buscar sin distinguir acentos ni mayúsculas.
+    - SQLite: usa la función personalizada nrm() registrada en el engine.
+    - PostgreSQL: usa unaccent() + lower() nativos.
+    nq debe venir ya normalizado con _nrm()."""
+    dialect = db.engine.dialect.name
+    if dialect == 'postgresql':
+        return db.func.lower(db.func.unaccent(col)).like(f'%{nq}%')
+    return db.func.nrm(col).like(f'%{nq}%')
 
 # ── Auth blueprint ────────────────────────────────────────────────────────────
 from auth import auth_bp, login_required, module_required, admin_required
@@ -144,15 +158,37 @@ def check_idle_timeout():
 with app.app_context():
     db.create_all()
 
-    # ── Migración: agregar columnas nuevas si no existen ─────────────────────
+    # ── PostgreSQL: habilitar extensión unaccent (búsqueda sin tildes) ────────
     from sqlalchemy import text, inspect as sa_inspect
+    if db.engine.dialect.name == 'postgresql':
+        try:
+            with db.engine.connect() as _conn:
+                _conn.execute(text('CREATE EXTENSION IF NOT EXISTS unaccent'))
+                _conn.commit()
+        except Exception:
+            pass
+
+    # ── Migración: agregar columnas nuevas si no existen ─────────────────────
     def _add_col_if_missing(table, col, col_type):
-        insp = sa_inspect(db.engine)
-        existing = [c['name'] for c in insp.get_columns(table)]
-        if col not in existing:
-            with db.engine.connect() as conn:
-                conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {col} {col_type}'))
-                conn.commit()
+        try:
+            insp = sa_inspect(db.engine)
+            existing = [c['name'] for c in insp.get_columns(table)]
+            if col not in existing:
+                with db.engine.connect() as conn:
+                    # PostgreSQL soporta IF NOT EXISTS; SQLite lo ignora igual
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type}'))
+                    conn.commit()
+        except Exception as _e:
+            # SQLite <3.35 no tiene IF NOT EXISTS en ALTER TABLE — fallback
+            try:
+                insp2 = sa_inspect(db.engine)
+                existing2 = [c['name'] for c in insp2.get_columns(table)]
+                if col not in existing2:
+                    with db.engine.connect() as conn2:
+                        conn2.execute(text(f'ALTER TABLE {table} ADD COLUMN {col} {col_type}'))
+                        conn2.commit()
+            except Exception:
+                pass
 
     for col, typ in [('ram','VARCHAR(50)'), ('os_version','VARCHAR(100)'),
                      ('cpu','VARCHAR(150)'), ('supplier','VARCHAR(150)'),
@@ -280,6 +316,27 @@ with app.app_context():
         ('absolute_sync_at',   'DATETIME'),
     ]:
         _add_col_if_missing('assets', col, typ)
+
+    # Evaluation tables — created by db.create_all()
+    for col, typ in [
+        ('empresa',               'VARCHAR(150)'),
+        ('localidad',             'VARCHAR(150)'),
+        ('nivel',                 'VARCHAR(100)'),
+        ('employee_submitted_at', 'DATETIME'),
+        ('chief_submitted_at',    'DATETIME'),
+        ('updated_at',            'DATETIME'),
+    ]:
+        _add_col_if_missing('evaluations', col, typ)
+
+    # Employee extended fields
+    for col, typ in [
+        ('position',   'VARCHAR(150)'),
+        ('client_id',  'INTEGER'),
+        ('site_type',  "VARCHAR(10) DEFAULT 'sitio'"),
+        ('address',    'TEXT'),
+        ('whatsapp',   'VARCHAR(50)'),
+    ]:
+        _add_col_if_missing('employees', col, typ)
 
     # Seed IT department if none exist
     from models import Department
@@ -451,6 +508,24 @@ def inventory_dashboard():
     total_categories  = Category.query.count()
     foraneo_count     = Asset.query.filter_by(location_type='foraneo').count()
     in_transit_count  = Shipment.query.filter_by(status='en_transito').count()
+
+    # Empleados activos por cliente (para el panel "Personas por Cliente")
+    client_emp_rows = db.session.query(
+        Client.id, Client.name,
+        db.func.count(Employee.id).label('emp_count')
+    ).outerjoin(Employee, db.and_(
+        Employee.client_id == Client.id,
+        Employee.active == True        # noqa: E712
+    )).group_by(Client.id, Client.name
+    ).order_by(db.desc('emp_count'), Client.name).all()
+    # Empleados sin cliente asignado
+    unassigned_emp = Employee.query.filter_by(active=True, client_id=None).count()
+    client_employee_counts = [
+        {'id': r.id, 'name': r.name, 'count': r.emp_count}
+        for r in client_emp_rows
+    ]
+    if unassigned_emp:
+        client_employee_counts.append({'id': None, 'name': 'Sin cliente', 'count': unassigned_emp})
     recent_assignments = Assignment.query.order_by(Assignment.created_at.desc()).limit(8).all()
     recent_shipments  = Shipment.query.filter(
         Shipment.status.notin_(['entregado', 'devuelto'])
@@ -563,6 +638,7 @@ def inventory_dashboard():
                            active_dept=active_dept,
                            warranty_expiring=warranty_expiring,
                            soon_30=soon_30,
+                           client_employee_counts=client_employee_counts,
                            departments=Department.query.filter_by(active=True).order_by(Department.name).all())
 
 
@@ -577,22 +653,20 @@ def assets_list():
     loc_filter      = request.args.get('location_type', '')
     query = Asset.query
     if q:
-        nq   = _nrm(q)          # query normalizado (sin tildes, minúsculas)
-        like = f'%{nq}%'
-        nrm  = db.func.nrm      # función SQLite registrada
+        nq = _nrm(q)
         # Buscar también por nombre de empleado asignado
         emp_asset_ids = db.session.query(Assignment.asset_id).join(
             Employee, Assignment.employee_id == Employee.id
         ).filter(
             Assignment.returned_date == None,   # noqa: E711
-            nrm(Employee.name).like(like)
+            _search_col(Employee.name, nq)
         ).subquery()
         query = query.outerjoin(Client, Asset.client_id == Client.id).filter(db.or_(
-            nrm(Asset.name).like(like),        nrm(Asset.asset_tag).like(like),
-            nrm(Asset.serial_number).like(like), nrm(Asset.manufacturer).like(like),
-            nrm(Asset.model).like(like),       nrm(Asset.supplier).like(like),
-            nrm(Asset.location).like(like),    nrm(Asset.cpu).like(like),
-            nrm(Asset.ram).like(like),         nrm(Client.name).like(like),
+            _search_col(Asset.name, nq),        _search_col(Asset.asset_tag, nq),
+            _search_col(Asset.serial_number, nq), _search_col(Asset.manufacturer, nq),
+            _search_col(Asset.model, nq),       _search_col(Asset.supplier, nq),
+            _search_col(Asset.location, nq),    _search_col(Asset.cpu, nq),
+            _search_col(Asset.ram, nq),         _search_col(Client.name, nq),
             Asset.id.in_(emp_asset_ids),
         ))
     if status_filter:
@@ -619,16 +693,14 @@ def assets_autocomplete():
     q = request.args.get('q', '').strip()
     if len(q) < 2:
         return jsonify([])
-    nq   = _nrm(q)
-    like = f'%{nq}%'
-    nrm  = db.func.nrm
+    nq = _nrm(q)
 
     # Búsqueda directa por campos del activo
     direct = Asset.query.outerjoin(Client, Asset.client_id == Client.id).filter(db.or_(
-        nrm(Asset.name).like(like),        nrm(Asset.asset_tag).like(like),
-        nrm(Asset.serial_number).like(like), nrm(Asset.manufacturer).like(like),
-        nrm(Asset.model).like(like),       nrm(Asset.supplier).like(like),
-        nrm(Client.name).like(like),
+        _search_col(Asset.name, nq),        _search_col(Asset.asset_tag, nq),
+        _search_col(Asset.serial_number, nq), _search_col(Asset.manufacturer, nq),
+        _search_col(Asset.model, nq),       _search_col(Asset.supplier, nq),
+        _search_col(Client.name, nq),
     )).limit(10).all()
 
     # Búsqueda por empleado asignado
@@ -636,7 +708,7 @@ def assets_autocomplete():
         Employee, Assignment.employee_id == Employee.id
     ).filter(
         Assignment.returned_date == None,   # noqa: E711
-        nrm(Employee.name).like(like)
+        _search_col(Employee.name, nq)
     ).limit(6).all()
 
     seen = set()
@@ -819,40 +891,54 @@ def asset_delete(id):
 @app.route('/employees')
 @login_required
 def employees_list():
-    q            = request.args.get('q', '')
+    q             = request.args.get('q', '')
     show_inactive = request.args.get('inactive', '')
+    fclient       = request.args.get('client_id', '', type=str)
+    fsite         = request.args.get('site_type', '')
     query = Employee.query
     if not show_inactive:
         query = query.filter_by(active=True)
+    if fclient:
+        query = query.filter_by(client_id=int(fclient))
+    if fsite:
+        query = query.filter_by(site_type=fsite)
     if q:
-        nq   = _nrm(q)
-        like = f'%{nq}%'
-        nrm  = db.func.nrm
+        nq = _nrm(q)
         query = query.filter(db.or_(
-            nrm(Employee.name).like(like),        nrm(Employee.employee_id).like(like),
-            nrm(Employee.department).like(like),  nrm(Employee.email).like(like),
+            _search_col(Employee.name, nq),        _search_col(Employee.employee_id, nq),
+            _search_col(Employee.department, nq),  _search_col(Employee.email, nq),
         ))
     page       = request.args.get('page', 1, type=int)
     pagination = query.order_by(Employee.name).paginate(page=page, per_page=50, error_out=False)
     employees  = pagination.items
+    clients    = Client.query.order_by(Client.name).all()
     return render_template('employees/list.html', employees=employees,
-                           q=q, show_inactive=show_inactive, pagination=pagination)
+                           q=q, show_inactive=show_inactive, pagination=pagination,
+                           clients=clients, fclient=fclient, fsite=fsite)
 
 
 @app.route('/employees/new', methods=['GET', 'POST'])
 @login_required
 def employee_new():
+    clients = Client.query.order_by(Client.name).all()
     if request.method == 'POST':
         emp_id = request.form.get('employee_id', '').strip()
         if Employee.query.filter_by(employee_id=emp_id).first():
             flash(f'El ID de empleado "{emp_id}" ya existe.', 'danger')
-            return render_template('employees/form.html', employee=None, form=request.form)
+            return render_template('employees/form.html', employee=None,
+                                   form=request.form, clients=clients)
+        client_id = request.form.get('client_id') or None
         emp = Employee(
             name=request.form.get('name', '').strip(),
             employee_id=emp_id,
+            position=request.form.get('position', '').strip() or None,
             department=request.form.get('department', '').strip() or None,
             email=request.form.get('email', '').strip() or None,
             phone=request.form.get('phone', '').strip() or None,
+            whatsapp=request.form.get('whatsapp', '').strip() or None,
+            client_id=int(client_id) if client_id else None,
+            site_type=request.form.get('site_type', 'sitio'),
+            address=request.form.get('address', '').strip() or None,
             active=True,
         )
         db.session.add(emp)
@@ -861,36 +947,44 @@ def employee_new():
         db.session.commit()
         flash(f'Empleado "{emp.name}" creado correctamente.', 'success')
         return redirect(url_for('employees_list'))
-    return render_template('employees/form.html', employee=None, form={})
+    return render_template('employees/form.html', employee=None, form={}, clients=clients)
 
 
 @app.route('/employees/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def employee_edit(id):
-    emp = Employee.query.get_or_404(id)
+    emp     = Employee.query.get_or_404(id)
+    clients = Client.query.order_by(Client.name).all()
     if request.method == 'POST':
         new_emp_id = request.form.get('employee_id', '').strip()
         existing   = Employee.query.filter_by(employee_id=new_emp_id).first()
         if existing and existing.id != emp.id:
             flash(f'El ID "{new_emp_id}" ya existe en otro empleado.', 'danger')
-            return render_template('employees/form.html', employee=emp, form=request.form)
+            return render_template('employees/form.html', employee=emp,
+                                   form=request.form, clients=clients)
         changes = []
         if emp.name != request.form.get('name', '').strip():
             changes.append(f'nombre: {emp.name} → {request.form.get("name").strip()}')
         if emp.department != (request.form.get('department', '').strip() or None):
             changes.append(f'depto: {emp.department} → {request.form.get("department")}')
-        emp.name       = request.form.get('name', '').strip()
+        client_id = request.form.get('client_id') or None
+        emp.name        = request.form.get('name', '').strip()
         emp.employee_id = new_emp_id
-        emp.department = request.form.get('department', '').strip() or None
-        emp.email      = request.form.get('email', '').strip() or None
-        emp.phone      = request.form.get('phone', '').strip() or None
-        emp.active     = 'active' in request.form
+        emp.position    = request.form.get('position', '').strip() or None
+        emp.department  = request.form.get('department', '').strip() or None
+        emp.email       = request.form.get('email', '').strip() or None
+        emp.phone       = request.form.get('phone', '').strip() or None
+        emp.whatsapp    = request.form.get('whatsapp', '').strip() or None
+        emp.client_id   = int(client_id) if client_id else None
+        emp.site_type   = request.form.get('site_type', 'sitio')
+        emp.address     = request.form.get('address', '').strip() or None
+        emp.active      = 'active' in request.form
         log_action('update', 'employee', entity_id=emp.id, entity_name=emp.name,
                    details='; '.join(changes) if changes else 'Sin cambios clave')
         db.session.commit()
         flash(f'Empleado "{emp.name}" actualizado.', 'success')
         return redirect(url_for('employees_list'))
-    return render_template('employees/form.html', employee=emp, form={})
+    return render_template('employees/form.html', employee=emp, form={}, clients=clients)
 
 
 @app.route('/employees/<int:id>/delete', methods=['POST'])
@@ -2527,9 +2621,7 @@ def global_search():
     if len(q) < 2:
         return jsonify({'assets': [], 'employees': [], 'projects': []})
 
-    nq   = _nrm(q)
-    like = f'%{nq}%'
-    nrm  = db.func.nrm
+    nq = _nrm(q)
     results = {'assets': [], 'employees': [], 'projects': []}
 
     # Assets
@@ -2542,9 +2634,9 @@ def global_search():
         dept_filter = db_user.department_id
 
     aq = Asset.query.filter(db.or_(
-        nrm(Asset.name).like(like),        nrm(Asset.asset_tag).like(like),
-        nrm(Asset.serial_number).like(like), nrm(Asset.manufacturer).like(like),
-        nrm(Asset.model).like(like),
+        _search_col(Asset.name, nq),        _search_col(Asset.asset_tag, nq),
+        _search_col(Asset.serial_number, nq), _search_col(Asset.manufacturer, nq),
+        _search_col(Asset.model, nq),
     ))
     if dept_filter:
         aq = aq.filter_by(department_id=dept_filter)
@@ -2557,8 +2649,8 @@ def global_search():
 
     # Employees
     for e in Employee.query.filter(db.or_(
-        nrm(Employee.name).like(like),        nrm(Employee.employee_id).like(like),
-        nrm(Employee.email).like(like),       nrm(Employee.department).like(like),
+        _search_col(Employee.name, nq),        _search_col(Employee.employee_id, nq),
+        _search_col(Employee.email, nq),       _search_col(Employee.department, nq),
     )).limit(5).all():
         results['employees'].append({
             'title': e.name,
@@ -2570,7 +2662,7 @@ def global_search():
     from models import Project
     if is_admin or 'projects' in sess_user.get('modules', []):
         for p in Project.query.filter(db.or_(
-            nrm(Project.name).like(like), nrm(Project.code).like(like),
+            _search_col(Project.name, nq), _search_col(Project.code, nq),
         )).limit(5).all():
             results['projects'].append({
                 'title': p.name,

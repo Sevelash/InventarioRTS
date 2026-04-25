@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}Evaluaciones de Desempeño — RTS{% endblock %}
+{% block page_title %}Evaluaciones de Desempeño{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('eval.new_eval') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nueva Evaluación
+  </a>
+{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([('Evaluación', none)]) }}
+
+<!-- Stat cards -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div style="width:48px;height:48px;border-radius:10px;background:#E8F3FA;
+                    display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="bi bi-clipboard-check" style="color:var(--rts-navy);font-size:20px;"></i>
+        </div>
+        <div>
+          <div style="font-size:26px;font-weight:700;color:var(--rts-navy);">{{ total }}</div>
+          <div style="font-size:11px;text-transform:uppercase;color:var(--rts-gray);letter-spacing:.06em;">Total</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div style="width:48px;height:48px;border-radius:10px;background:#FFF3E0;
+                    display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="bi bi-hourglass-split" style="color:#E65100;font-size:20px;"></i>
+        </div>
+        <div>
+          <div style="font-size:26px;font-weight:700;color:#E65100;">{{ pending }}</div>
+          <div style="font-size:11px;text-transform:uppercase;color:var(--rts-gray);letter-spacing:.06em;">En Proceso</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div style="width:48px;height:48px;border-radius:10px;background:#E6F9F0;
+                    display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="bi bi-patch-check" style="color:#28a745;font-size:20px;"></i>
+        </div>
+        <div>
+          <div style="font-size:26px;font-weight:700;color:#28a745;">{{ done }}</div>
+          <div style="font-size:11px;text-transform:uppercase;color:var(--rts-gray);letter-spacing:.06em;">Completadas</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="card">
+  <div class="card-header py-3">
+    <i class="bi bi-clipboard-data me-2"></i>Evaluaciones
+  </div>
+  <div class="card-body p-0">
+    {% if evals %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">Evaluado</th>
+            <th>Jefe Inmediato</th>
+            <th>Período</th>
+            <th>Estado</th>
+            <th>Auto-eval</th>
+            <th>Score Final</th>
+            <th>Nivel</th>
+            <th class="text-end pe-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ev in evals %}
+          {% set fs = ev.final_score %}
+          <tr>
+            <td class="ps-3 fw-semibold">{{ ev.evaluatee.name }}</td>
+            <td style="font-size:13px;">{{ ev.chief.name }}</td>
+            <td><span class="badge bg-light text-dark border">{{ ev.period }}</span></td>
+            <td>
+              {% if ev.status == 'draft' %}
+                <span class="badge bg-secondary">Borrador</span>
+              {% elif ev.status == 'open' %}
+                <span class="badge bg-warning text-dark">En Proceso</span>
+              {% else %}
+                <span class="badge bg-success">Completada</span>
+              {% endif %}
+            </td>
+            <td style="font-size:12px;">
+              {% if ev.employee_submitted_at %}
+                <i class="bi bi-check-circle text-success"></i>
+                {{ ev.employee_submitted_at.strftime('%d/%m/%Y') }}
+              {% else %}
+                <span class="text-muted">Pendiente</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if fs %}
+              <span style="font-weight:700;font-size:15px;color:var(--rts-navy);">{{ fs }}</span>
+              <span style="font-size:10px;color:var(--rts-gray);">/5</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if ev.level_label != '—' %}
+              <span class="badge
+                {% if ev.level_label == 'Sobresaliente' %}bg-success
+                {% elif ev.level_label == 'Notable' %}bg-primary
+                {% elif ev.level_label == 'Adecuado' %}bg-info text-dark
+                {% elif ev.level_label == 'Deficiente' %}bg-warning text-dark
+                {% else %}bg-danger{% endif %}">
+                {{ ev.level_label }}
+              </span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-3">
+              <a href="{{ url_for('eval.detail', id=ev.id) }}"
+                 class="btn btn-sm btn-outline-primary py-0 px-2" title="Ver/Llenar">
+                <i class="bi bi-eye"></i>
+              </a>
+              {% if ev.status == 'completed' %}
+              <a href="{{ url_for('eval.download_pdf', id=ev.id) }}"
+                 class="btn btn-sm btn-outline-danger py-0 px-2" title="Descargar PDF">
+                <i class="bi bi-file-earmark-pdf"></i>
+              </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-clipboard-x d-block" style="font-size:2.5rem;"></i>
+      No hay evaluaciones aún.
+      <div class="mt-2">
+        <a href="{{ url_for('eval.new_eval') }}" class="btn btn-rts btn-sm">
+          Crear primera evaluación
+        </a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

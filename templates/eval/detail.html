@@ -1,0 +1,590 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% set readonly_emp = (not is_employee) or ev.status != 'open' %}
+{% set readonly_chief = (not is_chief) or ev.status != 'open' %}
+{% set fs = ev.final_score %}
+
+{% block title %}Evaluación — {{ ev.evaluatee.name }} {{ ev.period }}{% endblock %}
+{% block page_title %}Evaluación de Desempeño{% endblock %}
+
+{% block topbar_actions %}
+  {% if ev.status in ('open','completed') %}
+  <a href="{{ url_for('eval.download_pdf', id=ev.id) }}" class="btn btn-sm btn-outline-danger">
+    <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+  </a>
+  {% endif %}
+  {% if ev.status == 'draft' and is_chief %}
+  <a href="{{ url_for('eval.edit_eval', id=ev.id) }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-pencil me-1"></i>Editar Objetivos
+  </a>
+  {% endif %}
+  {% if ev.status == 'completed' and is_chief %}
+  <form method="post" action="{{ url_for('eval.reopen_eval', id=ev.id) }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm btn-outline-warning">
+      <i class="bi bi-arrow-counterclockwise me-1"></i>Re-abrir
+    </button>
+  </form>
+  {% endif %}
+  <a href="{{ url_for('eval.index') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([('Evaluación', url_for('eval.index')), (ev.evaluatee.name, none)]) }}
+
+<!-- ── Header de la evaluación ────────────────────────── -->
+<div class="card mb-3" style="border-top:4px solid var(--rts-navy);">
+  <div class="card-body">
+    <div class="row g-2" style="font-size:13px;">
+      <div class="col-sm-3">
+        <div class="text-muted" style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;">Empleado</div>
+        <div class="fw-bold" style="font-size:15px;">{{ ev.evaluatee.name }}</div>
+      </div>
+      <div class="col-sm-3">
+        <div class="text-muted" style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;">Jefe Inmediato</div>
+        <div class="fw-semibold">{{ ev.chief.name }}</div>
+      </div>
+      <div class="col-sm-2">
+        <div class="text-muted" style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;">Período</div>
+        <div>{{ ev.period }}</div>
+      </div>
+      <div class="col-sm-2">
+        <div class="text-muted" style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;">Empresa / Nivel</div>
+        <div>{{ ev.empresa or '—' }} / {{ ev.nivel or '—' }}</div>
+      </div>
+      <div class="col-sm-2 text-end">
+        {% if ev.status == 'draft' %}
+          <span class="badge bg-secondary fs-6">Borrador</span>
+        {% elif ev.status == 'open' %}
+          <span class="badge bg-warning text-dark fs-6">En Proceso</span>
+        {% else %}
+          <span class="badge bg-success fs-6">Completada</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Escalas de valoración ─────────────────────────── -->
+<div class="card mb-3">
+  <div class="card-header py-2" style="background:var(--rts-navy);color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:.07em;">
+    Escalas de Valoración
+  </div>
+  <div class="card-body p-0">
+    <div class="row g-0 text-center">
+      {% for score, label in [(5,'Sobresaliente'),(4,'Notable'),(3,'Adecuado'),(2,'Deficiente'),(1,'Insuficiente')] %}
+      <div class="col border-end {% if loop.last %}border-0{% endif %} py-2">
+        <div style="font-size:20px;font-weight:700;color:var(--rts-navy);">{{ score }}</div>
+        <div style="font-size:11px;color:var(--rts-gray);">{{ label }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% if ev.status == 'draft' %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle me-2"></i>
+  Esta evaluación está en <strong>Borrador</strong>. El jefe debe
+  <a href="{{ url_for('eval.edit_eval', id=ev.id) }}">abrir la evaluación</a>
+  para que el empleado pueda llenarla.
+</div>
+{% endif %}
+
+<!-- ═══════════════════════════════════════════════════
+     SECCIÓN 1: OBJETIVOS
+     ═══════════════════════════════════════════════════ -->
+<form method="post" id="mainForm">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+<div class="card mb-3">
+  <div class="card-header py-2 d-flex align-items-center justify-content-between"
+       style="background:var(--rts-navy);color:#fff;">
+    <span><i class="bi bi-bullseye me-2"></i>Objetivos</span>
+    {% if ev.goals %}
+    <span style="font-size:11px;opacity:.8;">
+      Peso total: {{ ev.goals | sum(attribute='weight') }}%
+    </span>
+    {% endif %}
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table mb-0" style="font-size:13px;">
+        <thead style="background:#f8f9fa;font-size:10px;text-transform:uppercase;letter-spacing:.05em;">
+          <tr>
+            <th class="ps-3" style="width:3%;">#</th>
+            <th style="width:30%;">Objetivo</th>
+            <th style="width:8%;">Peso</th>
+            <th style="width:10%;">Período</th>
+            <th style="width:12%;">Auto-eval</th>
+            <th style="width:12%;">Eval. Jefe</th>
+            <th>Comentarios</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if ev.goals %}
+          {% for g in ev.goals %}
+          <tr>
+            <td class="ps-3 text-muted">{{ loop.index }}</td>
+            <td>
+              {% if g.category %}
+              <span class="badge bg-light text-dark border me-1" style="font-size:10px;">{{ g.category }}</span>
+              {% endif %}
+              <div style="font-size:12.5px;">{{ g.description }}</div>
+            </td>
+            <td><span class="badge bg-light text-dark border">{{ g.weight }}%</span></td>
+            <td style="font-size:12px;color:var(--rts-gray);">{{ g.period or '—' }}</td>
+
+            <!-- Auto-eval (empleado) -->
+            <td>
+              {% if readonly_emp %}
+                {% if g.employee_score %}
+                  {{ _score_badge(g.employee_score) }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              {% else %}
+                <select name="emp_goal_{{ g.id }}" class="form-select form-select-sm score-select">
+                  <option value="">—</option>
+                  {% for s in [5,4,3,2,1] %}
+                  <option value="{{ s }}" {% if g.employee_score == s %}selected{% endif %}>
+                    {{ s }} — {{ SCORE_LABELS[s] }}
+                  </option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+            </td>
+
+            <!-- Eval jefe -->
+            <td>
+              {% if readonly_chief %}
+                {% if g.chief_score %}
+                  {{ _score_badge(g.chief_score) }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              {% else %}
+                <select name="chief_goal_{{ g.id }}" class="form-select form-select-sm score-select chief-score">
+                  <option value="">—</option>
+                  {% for s in [5,4,3,2,1] %}
+                  <option value="{{ s }}" {% if g.chief_score == s %}selected{% endif %}>
+                    {{ s }} — {{ SCORE_LABELS[s] }}
+                  </option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+            </td>
+
+            <!-- Comentarios -->
+            <td>
+              {% if readonly_chief %}
+                <span style="font-size:12px;color:var(--rts-gray);">{{ g.comments or '—' }}</span>
+              {% else %}
+                <input type="text" name="comments_{{ g.id }}" class="form-control form-control-sm"
+                       value="{{ g.comments or '' }}" placeholder="Comentario…">
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          {% else %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-3">
+              Sin objetivos definidos.
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+        {% if ev.goals %}
+        <tfoot style="background:#f0f4f8;font-size:12px;">
+          <tr>
+            <td colspan="4" class="ps-3 fw-semibold">Promedio (Jefe)</td>
+            <td>
+              {% set emp_avg = ev.employee_goals_avg %}
+              {% if emp_avg %}
+                <strong>{{ emp_avg }}</strong>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              {% set ga = ev.goals_avg %}
+              {% if ga %}
+                <strong style="color:var(--rts-navy);">{{ ga }}</strong>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SECCIÓN 2: COMPETENCIAS
+     ═══════════════════════════════════════════════════ -->
+<div class="card mb-3">
+  <div class="card-header py-2" style="background:var(--rts-navy);color:#fff;">
+    <i class="bi bi-award me-2"></i>Desempeño de Habilidades / Competencias
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table mb-0" style="font-size:13px;">
+        <thead style="background:#f8f9fa;font-size:10px;text-transform:uppercase;letter-spacing:.05em;">
+          <tr>
+            <th class="ps-3" style="width:3%;">#</th>
+            <th style="width:22%;">Competencia</th>
+            <th style="width:30%;">Conducta actual</th>
+            <th style="width:12%;">Auto-eval</th>
+            <th style="width:12%;">Eval. Jefe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in ev.competencies %}
+          <tr>
+            <td class="ps-3 text-muted">{{ loop.index }}</td>
+            <td class="fw-semibold" style="font-size:12.5px;">{{ c.name }}</td>
+            <td style="font-size:11.5px;color:var(--rts-gray);">{{ c.description }}</td>
+
+            <!-- Auto-eval -->
+            <td>
+              {% if readonly_emp %}
+                {% if c.employee_score %}
+                  {{ _score_badge(c.employee_score) }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              {% else %}
+                <select name="emp_comp_{{ c.id }}" class="form-select form-select-sm score-select">
+                  <option value="">—</option>
+                  {% for s in [5,4,3,2,1] %}
+                  <option value="{{ s }}" {% if c.employee_score == s %}selected{% endif %}>
+                    {{ s }} — {{ SCORE_LABELS[s] }}
+                  </option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+            </td>
+
+            <!-- Eval jefe -->
+            <td>
+              {% if readonly_chief %}
+                {% if c.chief_score %}
+                  {{ _score_badge(c.chief_score) }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              {% else %}
+                <select name="chief_comp_{{ c.id }}" class="form-select form-select-sm score-select chief-score">
+                  <option value="">—</option>
+                  {% for s in [5,4,3,2,1] %}
+                  <option value="{{ s }}" {% if c.chief_score == s %}selected{% endif %}>
+                    {{ s }} — {{ SCORE_LABELS[s] }}
+                  </option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot style="background:#f0f4f8;font-size:12px;">
+          <tr>
+            <td colspan="3" class="ps-3 fw-semibold">Promedio competencias (Jefe)</td>
+            <td>
+              {% set eca = ev.employee_competencies_avg %}
+              {% if eca %}<strong>{{ eca }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              {% set ca = ev.competencies_avg %}
+              {% if ca %}<strong style="color:var(--rts-navy);">{{ ca }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SECCIÓN 3: CONOCIMIENTO / EXPERIENCIA (solo jefe)
+     ═══════════════════════════════════════════════════ -->
+<div class="card mb-3">
+  <div class="card-header py-2" style="background:var(--rts-navy);color:#fff;">
+    <i class="bi bi-mortarboard me-2"></i>Conocimiento y Experiencia
+    <small class="ms-2 opacity-75">(evaluado por el jefe inmediato)</small>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-sm-6">
+        <label class="form-label fw-semibold">Evaluación de Conocimientos Técnicos y Educación</label>
+        {% if readonly_chief %}
+          <div>
+            {% if ev.knowledge_score %}
+              {{ _score_badge(ev.knowledge_score | int) }}
+              <span class="ms-2 text-muted" style="font-size:13px;">{{ SCORE_LABELS.get(ev.knowledge_score | int, '') }}</span>
+            {% else %}
+              <span class="text-muted">No evaluado</span>
+            {% endif %}
+          </div>
+        {% else %}
+          <select name="knowledge_score" class="form-select chief-score">
+            <option value="">— Seleccionar —</option>
+            {% for s in [5,4,3,2,1] %}
+            <option value="{{ s }}" {% if ev.knowledge_score == s %}selected{% endif %}>
+              {{ s }} — {{ SCORE_LABELS[s] }}
+            </option>
+            {% endfor %}
+          </select>
+        {% endif %}
+      </div>
+      <div class="col-sm-6">
+        <label class="form-label fw-semibold">Evaluación de Experiencia</label>
+        {% if readonly_chief %}
+          <div>
+            {% if ev.experience_score %}
+              {{ _score_badge(ev.experience_score | int) }}
+              <span class="ms-2 text-muted" style="font-size:13px;">{{ SCORE_LABELS.get(ev.experience_score | int, '') }}</span>
+            {% else %}
+              <span class="text-muted">No evaluado</span>
+            {% endif %}
+          </div>
+        {% else %}
+          <select name="experience_score" class="form-select chief-score">
+            <option value="">— Seleccionar —</option>
+            {% for s in [5,4,3,2,1] %}
+            <option value="{{ s }}" {% if ev.experience_score == s %}selected{% endif %}>
+              {{ s }} — {{ SCORE_LABELS[s] }}
+            </option>
+            {% endfor %}
+          </select>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SECCIÓN 4: EVALUACIÓN GLOBAL
+     ═══════════════════════════════════════════════════ -->
+<div class="card mb-3" style="border:2px solid var(--rts-navy);">
+  <div class="card-header py-2" style="background:var(--rts-navy);color:#fff;">
+    <i class="bi bi-trophy me-2"></i>Evaluación Global de Desempeño
+  </div>
+  <div class="card-body p-0">
+    <table class="table mb-0" style="font-size:13px;">
+      <thead style="background:#f8f9fa;font-size:10px;text-transform:uppercase;letter-spacing:.05em;">
+        <tr>
+          <th class="ps-3">Componente</th>
+          <th class="text-center">Resultado</th>
+          <th class="text-center">Factor Ponderación</th>
+          <th class="text-center">Resultado Final</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set ga = ev.goals_avg %}
+        {% set ca = ev.competencies_avg %}
+        {% set kn = ev.knowledge_score %}
+        {% set ex = ev.experience_score %}
+        <tr>
+          <td class="ps-3">Cumplimiento de Objetivos</td>
+          <td class="text-center fw-bold" id="disp_goals">{{ ga or '—' }}</td>
+          <td class="text-center text-muted">65%</td>
+          <td class="text-center fw-bold" id="disp_goals_f">
+            {{ '%.2f'|format(ga * 0.65) if ga else '—' }}
+          </td>
+        </tr>
+        <tr>
+          <td class="ps-3">Desempeño por Habilidades / Competencias</td>
+          <td class="text-center fw-bold" id="disp_comp">{{ ca or '—' }}</td>
+          <td class="text-center text-muted">15%</td>
+          <td class="text-center fw-bold" id="disp_comp_f">
+            {{ '%.2f'|format(ca * 0.15) if ca else '—' }}
+          </td>
+        </tr>
+        <tr>
+          <td class="ps-3">Evaluación de Conocimientos Técnicos y Educación</td>
+          <td class="text-center fw-bold" id="disp_kn">{{ kn or '—' }}</td>
+          <td class="text-center text-muted">10%</td>
+          <td class="text-center fw-bold" id="disp_kn_f">
+            {{ '%.2f'|format(kn * 0.10) if kn else '—' }}
+          </td>
+        </tr>
+        <tr>
+          <td class="ps-3">Evaluación de Experiencia</td>
+          <td class="text-center fw-bold" id="disp_ex">{{ ex or '—' }}</td>
+          <td class="text-center text-muted">10%</td>
+          <td class="text-center fw-bold" id="disp_ex_f">
+            {{ '%.2f'|format(ex * 0.10) if ex else '—' }}
+          </td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr style="background:#E8F3FA;">
+          <td colspan="3" class="ps-3 fw-bold" style="font-size:14px;">SUMA FINAL</td>
+          <td class="text-center fw-bold" style="font-size:18px;color:var(--rts-navy);" id="disp_total">
+            {{ fs or '—' }}
+          </td>
+        </tr>
+        <tr style="background:#E8F3FA;">
+          <td colspan="3" class="ps-3 fw-bold" style="font-size:14px;">NIVEL DE COMPETENCIA</td>
+          <td class="text-center fw-bold" style="font-size:15px;" id="disp_level">
+            {% if ev.level_label != '—' %}
+            <span class="badge fs-6
+              {% if ev.level_label == 'Sobresaliente' %}bg-success
+              {% elif ev.level_label == 'Notable' %}bg-primary
+              {% elif ev.level_label == 'Adecuado' %}bg-info text-dark
+              {% elif ev.level_label == 'Deficiente' %}bg-warning text-dark
+              {% else %}bg-danger{% endif %}">
+              {{ ev.level_label }}
+            </span>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- ── Botones de acción ─────────────────────────────── -->
+{% if ev.status == 'open' %}
+<div class="card mb-4">
+  <div class="card-body d-flex flex-wrap gap-3 align-items-center">
+
+    {% if is_employee %}
+    <div class="border-end pe-3">
+      <div style="font-size:11px;text-transform:uppercase;color:var(--rts-gray);margin-bottom:6px;">
+        <i class="bi bi-person me-1"></i>Tu Auto-evaluación
+        {% if ev.employee_submitted_at %}
+          <span class="badge bg-success ms-1">Enviada</span>
+        {% endif %}
+      </div>
+      <button type="submit" name="action" value="save_employee" class="btn btn-outline-primary btn-sm me-2">
+        <i class="bi bi-save me-1"></i>Guardar borrador
+      </button>
+      <button type="submit" name="action" value="submit_employee" class="btn btn-primary btn-sm"
+              onclick="return confirm('¿Enviar tu auto-evaluación? Podrás editarla mientras la evaluación esté abierta.')">
+        <i class="bi bi-send me-1"></i>Enviar auto-evaluación
+      </button>
+    </div>
+    {% endif %}
+
+    {% if is_chief %}
+    <div>
+      <div style="font-size:11px;text-transform:uppercase;color:var(--rts-gray);margin-bottom:6px;">
+        <i class="bi bi-person-badge me-1"></i>Evaluación del Jefe
+        {% if ev.chief_submitted_at %}
+          <span class="badge bg-success ms-1">Completada</span>
+        {% endif %}
+      </div>
+      <button type="submit" name="action" value="save_chief" class="btn btn-outline-success btn-sm me-2">
+        <i class="bi bi-save me-1"></i>Guardar borrador
+      </button>
+      <button type="submit" name="action" value="complete" class="btn btn-success btn-sm"
+              onclick="return confirm('¿Completar la evaluación? Se cerrará y generará el resultado final.')">
+        <i class="bi bi-patch-check me-1"></i>Completar evaluación
+      </button>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endif %}
+
+</form>
+
+<!-- ── Firmas (completed) ──────────────────────────── -->
+{% if ev.status == 'completed' %}
+<div class="card mb-4">
+  <div class="card-header py-2" style="background:var(--rts-navy);color:#fff;">
+    <i class="bi bi-pen me-2"></i>Firmas
+  </div>
+  <div class="card-body">
+    <div class="row g-4 text-center">
+      {% for label in ['Empleado', 'Jefe Inmediato', 'Gerente de Área', 'Recursos Humanos'] %}
+      <div class="col-6 col-sm-3">
+        <div style="border-bottom:2px solid #333;height:50px;margin-bottom:8px;"></div>
+        <div style="font-size:12px;font-weight:600;">{{ label }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* Recalcular score global en tiempo real cuando el jefe edita */
+{% if not readonly_chief %}
+function recalcGlobal() {
+  // Goals avg
+  const goalSels = document.querySelectorAll('[name^="chief_goal_"]');
+  let gSum = 0, gCount = 0;
+  goalSels.forEach(s => {
+    const v = parseFloat(s.value);
+    if (!isNaN(v)) { gSum += v; gCount++; }
+  });
+  const ga = gCount > 0 ? gSum / gCount : null;
+
+  // Competencies avg
+  const compSels = document.querySelectorAll('[name^="chief_comp_"]');
+  let cSum = 0, cCount = 0;
+  compSels.forEach(s => {
+    const v = parseFloat(s.value);
+    if (!isNaN(v)) { cSum += v; cCount++; }
+  });
+  const ca = cCount > 0 ? cSum / cCount : null;
+
+  const kn = parseFloat(document.querySelector('[name="knowledge_score"]')?.value) || null;
+  const ex = parseFloat(document.querySelector('[name="experience_score"]')?.value) || null;
+
+  const fmt = v => v !== null ? v.toFixed(2) : '—';
+
+  document.getElementById('disp_goals').textContent  = ga !== null ? ga.toFixed(2) : '—';
+  document.getElementById('disp_comp').textContent   = ca !== null ? ca.toFixed(2) : '—';
+  document.getElementById('disp_kn').textContent     = kn !== null ? kn.toFixed(0) : '—';
+  document.getElementById('disp_ex').textContent     = ex !== null ? ex.toFixed(0) : '—';
+
+  document.getElementById('disp_goals_f').textContent = ga !== null ? (ga*0.65).toFixed(2) : '—';
+  document.getElementById('disp_comp_f').textContent  = ca !== null ? (ca*0.15).toFixed(2) : '—';
+  document.getElementById('disp_kn_f').textContent    = kn !== null ? (kn*0.10).toFixed(2) : '—';
+  document.getElementById('disp_ex_f').textContent    = ex !== null ? (ex*0.10).toFixed(2) : '—';
+
+  let total = null;
+  if (ga !== null && ca !== null && kn !== null && ex !== null) {
+    total = ga*0.65 + ca*0.15 + kn*0.10 + ex*0.10;
+  }
+  document.getElementById('disp_total').textContent = total !== null ? total.toFixed(2) : '—';
+
+  const lvlEl = document.getElementById('disp_level');
+  if (total !== null) {
+    let lvl, cls;
+    if (total >= 5)        { lvl='Sobresaliente'; cls='bg-success'; }
+    else if (total >= 4)   { lvl='Notable';        cls='bg-primary'; }
+    else if (total >= 3)   { lvl='Adecuado';       cls='bg-info text-dark'; }
+    else if (total >= 2)   { lvl='Deficiente';     cls='bg-warning text-dark'; }
+    else                   { lvl='Insuficiente';   cls='bg-danger'; }
+    lvlEl.innerHTML = `<span class="badge fs-6 ${cls}">${lvl}</span>`;
+  } else {
+    lvlEl.textContent = '—';
+  }
+}
+
+document.querySelectorAll('.chief-score').forEach(el => el.addEventListener('change', recalcGlobal));
+{% endif %}
+</script>
+{% endblock %}
+
+{# Macro para score badge #}
+{% macro _score_badge(s) %}
+{% set colors = {5:'#28a745',4:'#089ACF',3:'#6f42c1',2:'#fd7e14',1:'#dc3545'} %}
+<span style="display:inline-flex;align-items:center;justify-content:center;
+             width:32px;height:32px;border-radius:8px;font-weight:700;font-size:14px;
+             background:{{ colors.get(s,'#6c757d') }}20;color:{{ colors.get(s,'#6c757d') }};">
+  {{ s }}
+</span>
+{% endmacro %}

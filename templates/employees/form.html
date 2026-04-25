@@ -17,43 +17,86 @@
 
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-lg-7">
-    <form method="post">
+  <div class="col-lg-8">
+    <form method="post" id="empForm">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="card mb-4">
-        <div class="card-header py-3"><i class="bi bi-person me-2"></i>Datos del Empleado</div>
+
+      <!-- ── Datos personales ──────────────────────────── -->
+      <div class="card mb-3">
+        <div class="card-header py-3">
+          <i class="bi bi-person me-2"></i>Datos del Empleado
+        </div>
         <div class="card-body">
           <div class="row g-3">
+
             <div class="col-sm-8">
               <label class="form-label">Nombre Completo <span class="text-danger">*</span></label>
               <input type="text" name="name" class="form-control" required
                      value="{{ form.get('name', employee.name if employee else '') }}"
                      placeholder="Ej. Juan Pérez García">
             </div>
+
             <div class="col-sm-4">
               <label class="form-label">ID de Empleado <span class="text-danger">*</span></label>
               <input type="text" name="employee_id" class="form-control" required
                      value="{{ form.get('employee_id', employee.employee_id if employee else '') }}"
                      placeholder="Ej. EMP-001">
             </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Puesto / Cargo</label>
+              <input type="text" name="position" class="form-control"
+                     value="{{ form.get('position', employee.position if employee else '') }}"
+                     placeholder="Ej. Appointment Setter, Team Lead, Developer">
+            </div>
+
             <div class="col-sm-6">
               <label class="form-label">Departamento</label>
               <input type="text" name="department" class="form-control"
                      value="{{ form.get('department', employee.department if employee else '') }}"
                      placeholder="Ej. IT, Contabilidad, RRHH">
             </div>
+
             <div class="col-sm-6">
               <label class="form-label">Email</label>
               <input type="email" name="email" class="form-control"
                      value="{{ form.get('email', employee.email if employee else '') }}"
                      placeholder="correo@empresa.com">
             </div>
+
+            <!-- Teléfono + WhatsApp -->
             <div class="col-sm-6">
               <label class="form-label">Teléfono</label>
-              <input type="text" name="phone" class="form-control"
-                     value="{{ form.get('phone', employee.phone if employee else '') }}"
-                     placeholder="+1 (000) 000-0000">
+              <div class="input-group">
+                <input type="text" name="phone" id="phoneInput" class="form-control"
+                       value="{{ form.get('phone', employee.phone if employee else '') }}"
+                       placeholder="+52 (000) 000-0000">
+                <a id="waPhoneBtn" href="#" target="_blank"
+                   class="btn btn-outline-success" title="Abrir en WhatsApp"
+                   style="display:none;">
+                  <i class="bi bi-whatsapp"></i>
+                </a>
+              </div>
             </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">
+                <i class="bi bi-whatsapp text-success me-1"></i>WhatsApp
+                <small class="text-muted">(si es diferente al teléfono)</small>
+              </label>
+              <div class="input-group">
+                <input type="text" name="whatsapp" id="waInput" class="form-control"
+                       value="{{ form.get('whatsapp', employee.whatsapp if employee else '') }}"
+                       placeholder="+52 (000) 000-0000">
+                <a id="waBtn" href="#" target="_blank"
+                   class="btn btn-outline-success" title="Abrir en WhatsApp"
+                   style="display:none;">
+                  <i class="bi bi-whatsapp"></i>
+                </a>
+              </div>
+              <div class="form-text">Dejar en blanco si usa el mismo número.</div>
+            </div>
+
             {% if employee %}
             <div class="col-sm-6 d-flex align-items-end">
               <div class="form-check mb-2">
@@ -63,6 +106,65 @@
               </div>
             </div>
             {% endif %}
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Cliente y Ubicación ───────────────────────── -->
+      <div class="card mb-3">
+        <div class="card-header py-3">
+          <i class="bi bi-building me-2"></i>Cliente y Ubicación
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+
+            <div class="col-sm-6">
+              <label class="form-label">Cliente / Campaña</label>
+              <select name="client_id" class="form-select">
+                <option value="">— Sin cliente / Interno —</option>
+                {% for c in clients %}
+                {% set sel_id = form.get('client_id', employee.client_id|string if employee and employee.client_id else '') %}
+                <option value="{{ c.id }}"
+                  {% if sel_id == c.id|string %}selected{% endif %}>
+                  {{ c.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-sm-6">
+              <label class="form-label">Tipo de ubicación</label>
+              {% set cur_site = form.get('site_type', employee.site_type if employee else 'sitio') %}
+              <div class="d-flex gap-3 mt-1">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="site_type"
+                         id="siteSitio" value="sitio"
+                         {% if cur_site != 'foraneo' %}checked{% endif %}
+                         onchange="toggleAddress()">
+                  <label class="form-check-label" for="siteSitio">
+                    <i class="bi bi-building me-1"></i>En Sitio
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="site_type"
+                         id="siteForaneo" value="foraneo"
+                         {% if cur_site == 'foraneo' %}checked{% endif %}
+                         onchange="toggleAddress()">
+                  <label class="form-check-label" for="siteForaneo">
+                    <i class="bi bi-geo-alt me-1"></i>Foráneo
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12" id="addressBlock"
+                 style="{{ '' if (form.get('site_type', employee.site_type if employee else 'sitio') == 'foraneo') else 'display:none;' }}">
+              <label class="form-label">Dirección <small class="text-muted">(Foráneo)</small></label>
+              <textarea name="address" class="form-control" rows="2"
+                        placeholder="Calle, Ciudad, Estado, CP, País">{{ form.get('address', employee.address if employee else '') }}</textarea>
+            </div>
+
           </div>
         </div>
       </div>
@@ -76,4 +178,39 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── Mostrar/ocultar dirección según tipo de sitio ── */
+function toggleAddress() {
+  const foraneo = document.getElementById('siteForaneo').checked;
+  document.getElementById('addressBlock').style.display = foraneo ? '' : 'none';
+}
+
+/* ── Botones WhatsApp dinámicos ── */
+function buildWaUrl(val) {
+  const clean = val.replace(/\D/g, '');
+  return clean.length >= 7 ? `https://wa.me/${clean}` : null;
+}
+
+function updateWaBtn(inputId, btnId) {
+  const val = document.getElementById(inputId).value;
+  const btn = document.getElementById(btnId);
+  const url = buildWaUrl(val);
+  if (url) {
+    btn.href = url;
+    btn.style.display = '';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+document.getElementById('phoneInput').addEventListener('input', () => updateWaBtn('phoneInput', 'waPhoneBtn'));
+document.getElementById('waInput').addEventListener('input',    () => updateWaBtn('waInput',    'waBtn'));
+
+/* Init on load */
+updateWaBtn('phoneInput', 'waPhoneBtn');
+updateWaBtn('waInput',    'waBtn');
+</script>
 {% endblock %}

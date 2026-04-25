@@ -74,6 +74,157 @@
 
 {% block content %}
 
+<!-- ══════════════════════════════════════════════════════════
+     RESUMEN GENERAL — arriba del todo
+     ══════════════════════════════════════════════════════════ -->
+<div class="mb-4">
+  <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--rts-gray);
+              font-weight:700;margin-bottom:12px;font-family:'Aptos','Calibri',sans-serif;">
+    Resumen General
+  </div>
+
+  <!-- Fila 1: KPIs de activos -->
+  <div class="row g-3 mb-3">
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('assets_list') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#E8F0FA;">
+            <i class="bi bi-laptop" style="color:var(--rts-navy);"></i>
+          </div>
+          <div>
+            <div class="stat-value">{{ total_assets }}</div>
+            <div class="stat-label">Total Activos</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('assets_list', status='available') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#E6F9F0;">
+            <i class="bi bi-check-circle" style="color:#28a745;"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:#28a745;">{{ available }}</div>
+            <div class="stat-label">Disponibles</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('assets_list', status='in_use') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#E8F3FA;">
+            <i class="bi bi-person-check" style="color:var(--rts-blue);"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:var(--rts-blue);">{{ in_use }}</div>
+            <div class="stat-label">En Uso</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('assets_list', status='maintenance') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#FFF3E0;">
+            <i class="bi bi-tools" style="color:#E65100;"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:#E65100;">{{ maintenance }}</div>
+            <div class="stat-label">Mantenimiento</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('employees_list') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#F3E5F5;">
+            <i class="bi bi-people" style="color:#7C3AED;"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:#7C3AED;">{{ total_employees }}</div>
+            <div class="stat-label">Empleados Activos</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('assets_list', location_type='foraneo') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#FFF3E0;">
+            <i class="bi bi-truck" style="color:#E65100;"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:#E65100;">{{ foraneo_count }}</div>
+            <div class="stat-label">Activos Foráneos</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('shipments_list', status='en_transito') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#FFF8DC;">
+            <i class="bi bi-send" style="color:#B8860B;"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:#B8860B;">{{ in_transit_count }}</div>
+            <div class="stat-label">En Tránsito</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="{{ url_for('assets_list', status='retired') }}" class="text-decoration-none">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#F2F2F2;">
+            <i class="bi bi-archive" style="color:var(--rts-gray);"></i>
+          </div>
+          <div>
+            <div class="stat-value" style="color:var(--rts-gray);">{{ retired }}</div>
+            <div class="stat-label">Retirados</div>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Fila 2: Personas por Cliente (dentro del Resumen General) -->
+  {% if client_employee_counts %}
+  <div style="border-top:1px solid var(--rts-border);padding-top:12px;margin-top:4px;">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--rts-gray);
+                font-weight:700;margin-bottom:10px;font-family:'Aptos','Calibri',sans-serif;">
+      Personas por Cliente
+    </div>
+    <div class="row g-2">
+      {% for c in client_employee_counts %}
+      <div class="col-6 col-sm-4 col-lg-3 col-xl-2">
+        {% if c.id %}
+        <a href="{{ url_for('employees_list', client_id=c.id) }}" class="text-decoration-none">
+        {% else %}
+        <a href="{{ url_for('employees_list') }}" class="text-decoration-none">
+        {% endif %}
+          <div class="stat-card" style="padding:10px 14px;">
+            <div class="stat-icon" style="background:#E8F3FA;width:34px;height:34px;border-radius:8px;">
+              <i class="bi bi-building" style="color:var(--rts-navy);font-size:15px;"></i>
+            </div>
+            <div style="min-width:0;">
+              <div class="stat-value" style="font-size:22px;line-height:1.1;">{{ c.count }}</div>
+              <div class="stat-label" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                   title="{{ c.name }}">{{ c.name }}</div>
+            </div>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
 <!-- Warranty expiry alert banner -->
 {% if warranty_expiring %}
 <div class="warranty-alert-banner" id="warranty-alerts">
@@ -98,7 +249,7 @@
 {% endif %}
 
 <!-- ══════════════════════════════════════════════════════════
-     1. GRÁFICA — arriba del todo
+     2. GRÁFICA
      ══════════════════════════════════════════════════════════ -->
 <div class="card mb-4">
 
@@ -329,121 +480,6 @@
 </div><!-- /tablas -->
 
 
-<!-- ══════════════════════════════════════════════════════════
-     3. KPI CARDS — al fondo
-     ══════════════════════════════════════════════════════════ -->
-<div style="border-top:1px solid var(--rts-border);margin-bottom:16px;padding-top:16px;">
-  <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--rts-gray);
-              font-weight:700;margin-bottom:12px;font-family:'Aptos','Calibri',sans-serif;">
-    Resumen General
-  </div>
-  <div class="row g-3">
-    <div class="col-sm-6 col-lg-3">
-      <a href="{{ url_for('assets_list') }}" class="text-decoration-none">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#E8F0FA;">
-            <i class="bi bi-laptop" style="color:var(--rts-navy);"></i>
-          </div>
-          <div>
-            <div class="stat-value">{{ total_assets }}</div>
-            <div class="stat-label">Total Activos</div>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-sm-6 col-lg-3">
-      <a href="{{ url_for('assets_list', status='available') }}" class="text-decoration-none">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#E6F9F0;">
-            <i class="bi bi-check-circle" style="color:#28a745;"></i>
-          </div>
-          <div>
-            <div class="stat-value" style="color:#28a745;">{{ available }}</div>
-            <div class="stat-label">Disponibles</div>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-sm-6 col-lg-3">
-      <a href="{{ url_for('assets_list', status='in_use') }}" class="text-decoration-none">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#E8F3FA;">
-            <i class="bi bi-person-check" style="color:var(--rts-blue);"></i>
-          </div>
-          <div>
-            <div class="stat-value" style="color:var(--rts-blue);">{{ in_use }}</div>
-            <div class="stat-label">En Uso</div>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-sm-6 col-lg-3">
-      <a href="{{ url_for('assets_list', status='maintenance') }}" class="text-decoration-none">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#FFF3E0;">
-            <i class="bi bi-tools" style="color:#E65100;"></i>
-          </div>
-          <div>
-            <div class="stat-value" style="color:#E65100;">{{ maintenance }}</div>
-            <div class="stat-label">Mantenimiento</div>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-sm-6 col-lg-3">
-      <a href="{{ url_for('employees_list') }}" class="text-decoration-none">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#F3E5F5;">
-            <i class="bi bi-people" style="color:#7C3AED;"></i>
-          </div>
-          <div>
-            <div class="stat-value" style="color:#7C3AED;">{{ total_employees }}</div>
-            <div class="stat-label">Empleados Activos</div>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-sm-6 col-lg-3">
-      <a href="{{ url_for('assets_list', location_type='foraneo') }}" class="text-decoration-none">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#FFF3E0;">
-            <i class="bi bi-truck" style="color:#E65100;"></i>
-          </div>
-          <div>
-            <div class="stat-value" style="color:#E65100;">{{ foraneo_count }}</div>
-            <div class="stat-label">Activos Foráneos</div>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-sm-6 col-lg-3">
-      <a href="{{ url_for('shipments_list', status='en_transito') }}" class="text-decoration-none">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#FFF8DC;">
-            <i class="bi bi-send" style="color:#B8860B;"></i>
-          </div>
-          <div>
-            <div class="stat-value" style="color:#B8860B;">{{ in_transit_count }}</div>
-            <div class="stat-label">En Tránsito</div>
-          </div>
-        </div>
-      </a>
-    </div>
-    <div class="col-sm-6 col-lg-3">
-      <a href="{{ url_for('assets_list', status='retired') }}" class="text-decoration-none">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#F2F2F2;">
-            <i class="bi bi-archive" style="color:var(--rts-gray);"></i>
-          </div>
-          <div>
-            <div class="stat-value" style="color:var(--rts-gray);">{{ retired }}</div>
-            <div class="stat-label">Retirados</div>
-          </div>
-        </div>
-      </a>
-    </div>
-  </div>
-</div><!-- /kpi cards -->
 
 {% endblock %}
 

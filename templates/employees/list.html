@@ -22,18 +22,48 @@
 <div class="card mb-3">
   <div class="card-body py-2">
     <form method="get" class="row g-2 align-items-center">
-      <div class="col-sm-5">
+
+      <!-- Búsqueda -->
+      <div class="col-sm-4">
         <div class="input-group input-group-sm">
           <span class="input-group-text"><i class="bi bi-search"></i></span>
-          <input type="text" name="q" class="form-control" placeholder="Buscar nombre, ID, depto, email..." value="{{ q }}">
+          <input type="text" name="q" class="form-control"
+                 placeholder="Buscar nombre, ID, depto, email..." value="{{ q }}">
         </div>
       </div>
+
+      <!-- Filtro cliente -->
+      <div class="col-sm-3">
+        <select name="client_id" class="form-select form-select-sm">
+          <option value="">Todos los clientes</option>
+          {% for c in clients %}
+          <option value="{{ c.id }}" {% if fclient == c.id|string %}selected{% endif %}>
+            {{ c.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Filtro sitio -->
+      <div class="col-auto">
+        <select name="site_type" class="form-select form-select-sm">
+          <option value="">Todos (En Sitio / Foráneo)</option>
+          <option value="sitio"   {% if fsite == 'sitio' %}selected{% endif %}>En Sitio</option>
+          <option value="foraneo" {% if fsite == 'foraneo' %}selected{% endif %}>Foráneo</option>
+        </select>
+      </div>
+
+      <!-- Inactivos -->
       <div class="col-auto">
         <div class="form-check form-check-inline mb-0">
-          <input class="form-check-input" type="checkbox" name="inactive" id="inactive" value="1" {% if show_inactive %}checked{% endif %}>
-          <label class="form-check-label" for="inactive" style="font-size:0.85rem;">Mostrar inactivos</label>
+          <input class="form-check-input" type="checkbox" name="inactive" id="inactive"
+                 value="1" {% if show_inactive %}checked{% endif %}>
+          <label class="form-check-label" for="inactive" style="font-size:0.85rem;">
+            Mostrar inactivos
+          </label>
         </div>
       </div>
+
       <div class="col-auto">
         <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
         <a href="{{ url_for('employees_list') }}" class="btn btn-outline-secondary btn-sm">Limpiar</a>
@@ -54,10 +84,12 @@
           <tr>
             <th class="ps-3">ID Empleado</th>
             <th>Nombre</th>
+            <th>Puesto</th>
+            <th>Cliente / Campaña</th>
+            <th>Sitio</th>
             <th>Departamento</th>
-            <th>Email</th>
-            <th>Teléfono</th>
-            <th>Activos Asignados</th>
+            <th>Contacto</th>
+            <th>Activos</th>
             <th>Estado</th>
             <th class="text-end pe-3">Acciones</th>
           </tr>
@@ -67,9 +99,59 @@
           <tr>
             <td class="ps-3"><span class="asset-tag-badge">{{ emp.employee_id }}</span></td>
             <td class="fw-semibold">{{ emp.name }}</td>
-            <td>{{ emp.department or '—' }}</td>
-            <td>{{ emp.email or '—' }}</td>
-            <td>{{ emp.phone or '—' }}</td>
+
+            <!-- Puesto -->
+            <td style="font-size:12.5px;">{{ emp.position or '—' }}</td>
+
+            <!-- Cliente / Campaña -->
+            <td style="font-size:12.5px;">
+              {% if emp.client %}
+                <span class="badge" style="background:#E8F3FA;color:var(--rts-navy);font-weight:600;">
+                  <i class="bi bi-building me-1"></i>{{ emp.client.name }}
+                </span>
+              {% else %}
+                <span class="text-muted" style="font-size:11.5px;">Interno</span>
+              {% endif %}
+            </td>
+
+            <!-- Sitio -->
+            <td>
+              {% if emp.site_type == 'foraneo' %}
+                <span class="badge bg-warning text-dark" title="{{ emp.address or '' }}">
+                  <i class="bi bi-geo-alt me-1"></i>Foráneo
+                </span>
+              {% else %}
+                <span class="badge bg-light text-secondary border">
+                  <i class="bi bi-building me-1"></i>En Sitio
+                </span>
+              {% endif %}
+            </td>
+
+            <td style="font-size:12.5px;">{{ emp.department or '—' }}</td>
+
+            <!-- Contacto: email + teléfono + WA -->
+            <td style="font-size:12px;white-space:nowrap;">
+              {% if emp.email %}
+              <a href="mailto:{{ emp.email }}" class="text-decoration-none text-muted d-block" title="{{ emp.email }}">
+                <i class="bi bi-envelope me-1"></i>{{ emp.email[:22] }}{% if emp.email|length > 22 %}…{% endif %}
+              </a>
+              {% endif %}
+              {% if emp.phone or emp.whatsapp %}
+              <span class="text-muted">
+                <i class="bi bi-telephone me-1"></i>{{ emp.phone or emp.whatsapp }}
+              </span>
+              {% if emp.wa_link %}
+              <a href="{{ emp.wa_link }}" target="_blank"
+                 class="ms-1 text-success" title="Abrir WhatsApp">
+                <i class="bi bi-whatsapp"></i>
+              </a>
+              {% endif %}
+              {% endif %}
+              {% if not emp.email and not emp.phone and not emp.whatsapp %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
             <td>
               {% set count = emp.current_assets|length %}
               {% if count > 0 %}
@@ -78,6 +160,7 @@
                 <span class="text-muted">0</span>
               {% endif %}
             </td>
+
             <td>
               {% if emp.active %}
                 <span class="badge bg-success">Activo</span>
@@ -85,6 +168,7 @@
                 <span class="badge bg-secondary">Inactivo</span>
               {% endif %}
             </td>
+
             <td class="text-end pe-3">
               {% if emp.current_assets|length > 0 %}
               <a href="{{ url_for('employee_responsiva', id=emp.id) }}"
@@ -98,13 +182,16 @@
                 <i class="bi bi-box-arrow-right"></i>
               </a>
               {% endif %}
-              <a href="{{ url_for('employee_edit', id=emp.id) }}" class="btn btn-sm btn-outline-secondary py-0 px-2">
+              <a href="{{ url_for('employee_edit', id=emp.id) }}"
+                 class="btn btn-sm btn-outline-secondary py-0 px-2">
                 <i class="bi bi-pencil"></i>
               </a>
               <form action="{{ url_for('employee_delete', id=emp.id) }}" method="post" class="d-inline"
                     onsubmit="return confirm('¿Eliminar empleado {{ emp.name }}?')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-outline-danger py-0 px-2"><i class="bi bi-trash"></i></button>
+                <button class="btn btn-sm btn-outline-danger py-0 px-2">
+                  <i class="bi bi-trash"></i>
+                </button>
               </form>
             </td>
           </tr>
@@ -121,7 +208,12 @@
       </div>
     </div>
     {% endif %}
-    {{ pagination_bar(pagination, 'employees_list', {'q': q, 'inactive': '1' if show_inactive else ''}) }}
+    {{ pagination_bar(pagination, 'employees_list', {
+        'q': q,
+        'inactive': '1' if show_inactive else '',
+        'client_id': fclient,
+        'site_type': fsite
+    }) }}
   </div>
 </div>
 {% endblock %}

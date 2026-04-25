@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}{{ 'Editar' if ev else 'Nueva' }} Evaluación — RTS{% endblock %}
+{% block page_title %}{{ 'Editar Evaluación' if ev else 'Nueva Evaluación' }}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('eval.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Cancelar
+  </a>
+{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([('Evaluación', url_for('eval.index')), (('Editar' if ev else 'Nueva'), none)]) }}
+
+<form method="post" id="evalForm">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <!-- ── Datos generales ─────────────────────────────────── -->
+  <div class="card mb-3">
+    <div class="card-header py-3">
+      <i class="bi bi-person-lines-fill me-2"></i>Datos Generales
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-sm-6">
+          <label class="form-label">Empleado a evaluar <span class="text-danger">*</span></label>
+          <select name="evaluatee_id" class="form-select" required>
+            <option value="">— Seleccionar —</option>
+            {% for u in users %}
+            <option value="{{ u.id }}"
+              {% if ev and ev.evaluatee_id == u.id %}selected
+              {% elif form.get('evaluatee_id') == u.id|string %}selected{% endif %}>
+              {{ u.name }} ({{ u.username }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label">Jefe Inmediato <span class="text-danger">*</span></label>
+          <select name="chief_id" class="form-select" required>
+            <option value="">— Seleccionar —</option>
+            {% for u in users %}
+            <option value="{{ u.id }}"
+              {% if ev and ev.chief_id == u.id %}selected
+              {% elif form.get('chief_id') == u.id|string %}selected{% endif %}>
+              {{ u.name }} ({{ u.username }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label">Período</label>
+          <input type="text" name="period" class="form-control"
+                 value="{{ ev.period if ev else form.get('period', '') or '2026' }}"
+                 placeholder="2026">
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label">Nivel</label>
+          <input type="text" name="nivel" class="form-control"
+                 value="{{ ev.nivel if ev else form.get('nivel', '') }}"
+                 placeholder="Ej. Senior, Lead…">
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label">Empresa</label>
+          <input type="text" name="empresa" class="form-control"
+                 value="{{ ev.empresa if ev else form.get('empresa', '') }}"
+                 placeholder="Remote Team Solutions">
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label">Localidad</label>
+          <input type="text" name="localidad" class="form-control"
+                 value="{{ ev.localidad if ev else form.get('localidad', '') }}"
+                 placeholder="Ciudad, País">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Escalas de valoración (referencia) ──────────────── -->
+  <div class="card mb-3">
+    <div class="card-header py-2" style="background:var(--rts-navy);color:#fff;">
+      <i class="bi bi-bar-chart-steps me-2"></i>Escalas de Valoración
+    </div>
+    <div class="card-body p-0">
+      <div class="row g-0 text-center">
+        {% for score, label in [(5,'Sobresaliente'),(4,'Notable'),(3,'Adecuado'),(2,'Deficiente'),(1,'Insuficiente')] %}
+        <div class="col border-end {% if loop.last %}border-0{% endif %} py-2">
+          <div style="font-size:22px;font-weight:700;color:var(--rts-navy);">{{ score }}</div>
+          <div style="font-size:11px;color:var(--rts-gray);">{{ label }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Objetivos ───────────────────────────────────────── -->
+  <div class="card mb-3">
+    <div class="card-header py-3 d-flex align-items-center justify-content-between"
+         style="background:var(--rts-navy);color:#fff;">
+      <span><i class="bi bi-bullseye me-2"></i>Objetivos</span>
+      <button type="button" class="btn btn-sm btn-light" onclick="addGoalRow()">
+        <i class="bi bi-plus-lg me-1"></i>Agregar Objetivo
+      </button>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table mb-0" id="goalsTable">
+          <thead style="background:#f8f9fa;font-size:11px;text-transform:uppercase;letter-spacing:.05em;">
+            <tr>
+              <th class="ps-3" style="width:25%;">Categoría</th>
+              <th style="width:35%;">Descripción <span class="text-danger">*</span></th>
+              <th style="width:10%;">Peso %</th>
+              <th style="width:20%;">Período</th>
+              <th style="width:10%;"></th>
+            </tr>
+          </thead>
+          <tbody id="goalRows">
+            {% if ev and ev.goals %}
+              {% for g in ev.goals %}
+              <tr class="goal-row">
+                <td class="ps-3">
+                  <input type="text" name="goal_category" class="form-control form-control-sm"
+                         value="{{ g.category or '' }}" placeholder="Financiero, Operacional…">
+                </td>
+                <td>
+                  <textarea name="goal_description" class="form-control form-control-sm"
+                            rows="2" placeholder="Descripción del objetivo…">{{ g.description }}</textarea>
+                </td>
+                <td>
+                  <input type="number" name="goal_weight" class="form-control form-control-sm weight-input"
+                         min="0" max="100" value="{{ g.weight }}" oninput="updateWeightTotal()">
+                </td>
+                <td>
+                  <input type="text" name="goal_period" class="form-control form-control-sm"
+                         value="{{ g.period or '' }}" placeholder="Ene - Dic">
+                </td>
+                <td class="text-center">
+                  <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
+                          onclick="removeRow(this)">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <!-- 5 filas vacías por defecto -->
+              {% for i in range(5) %}
+              <tr class="goal-row">
+                <td class="ps-3">
+                  <input type="text" name="goal_category" class="form-control form-control-sm"
+                         placeholder="Financiero, Operacional…">
+                </td>
+                <td>
+                  <textarea name="goal_description" class="form-control form-control-sm"
+                            rows="2" placeholder="Descripción del objetivo…"></textarea>
+                </td>
+                <td>
+                  <input type="number" name="goal_weight" class="form-control form-control-sm weight-input"
+                         min="0" max="100" value="" oninput="updateWeightTotal()">
+                </td>
+                <td>
+                  <input type="text" name="goal_period" class="form-control form-control-sm"
+                         placeholder="Ene - Dic">
+                </td>
+                <td class="text-center">
+                  <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
+                          onclick="removeRow(this)">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+          <tfoot>
+            <tr style="background:#f8f9fa;">
+              <td colspan="2" class="ps-3 fw-semibold" style="font-size:13px;">Total Pesos</td>
+              <td>
+                <span id="weightTotal" class="fw-bold" style="font-size:15px;">0</span>
+                <span style="font-size:11px;color:var(--rts-gray);">/ 100%</span>
+              </td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mb-4">
+    <button type="submit" class="btn btn-rts">
+      <i class="bi bi-check-lg me-1"></i>{{ 'Guardar Cambios' if ev else 'Crear Evaluación' }}
+    </button>
+    {% if ev %}
+    <form method="post" action="{{ url_for('eval.open_eval', id=ev.id) }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-success"
+              onclick="return confirm('¿Abrir la evaluación para que el empleado pueda llenarla?')">
+        <i class="bi bi-unlock me-1"></i>Abrir para evaluación
+      </button>
+    </form>
+    {% endif %}
+    <a href="{{ url_for('eval.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateWeightTotal() {
+  const inputs = document.querySelectorAll('.weight-input');
+  let total = 0;
+  inputs.forEach(i => { total += parseInt(i.value || 0); });
+  const el = document.getElementById('weightTotal');
+  el.textContent = total;
+  el.style.color = total === 100 ? '#28a745' : total > 100 ? '#dc3545' : 'var(--rts-navy)';
+}
+
+function addGoalRow() {
+  const row = document.createElement('tr');
+  row.className = 'goal-row';
+  row.innerHTML = `
+    <td class="ps-3">
+      <input type="text" name="goal_category" class="form-control form-control-sm"
+             placeholder="Financiero, Operacional…">
+    </td>
+    <td>
+      <textarea name="goal_description" class="form-control form-control-sm"
+                rows="2" placeholder="Descripción del objetivo…"></textarea>
+    </td>
+    <td>
+      <input type="number" name="goal_weight" class="form-control form-control-sm weight-input"
+             min="0" max="100" oninput="updateWeightTotal()">
+    </td>
+    <td>
+      <input type="text" name="goal_period" class="form-control form-control-sm"
+             placeholder="Ene - Dic">
+    </td>
+    <td class="text-center">
+      <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
+              onclick="removeRow(this)">
+        <i class="bi bi-trash"></i>
+      </button>
+    </td>`;
+  document.getElementById('goalRows').appendChild(row);
+  updateWeightTotal();
+}
+
+function removeRow(btn) {
+  btn.closest('tr').remove();
+  updateWeightTotal();
+}
+
+document.addEventListener('DOMContentLoaded', updateWeightTotal);
+</script>
+{% endblock %}

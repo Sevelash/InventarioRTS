@@ -383,19 +383,34 @@ class Asset(db.Model):
 
 class Employee(db.Model):
     __tablename__ = 'employees'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(150), nullable=False)
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String(150), nullable=False)
     employee_id = db.Column(db.String(50), unique=True, nullable=False)
-    department = db.Column(db.String(100))
-    email = db.Column(db.String(150))
-    phone = db.Column(db.String(30))
-    active = db.Column(db.Boolean, default=True)
+    position    = db.Column(db.String(150))           # Puesto / cargo
+    department  = db.Column(db.String(100))
+    email       = db.Column(db.String(150))
+    phone       = db.Column(db.String(50))
+    whatsapp    = db.Column(db.String(50))          # número de WhatsApp (puede diferir del tel)
+    active      = db.Column(db.Boolean, default=True)
+    # Cliente al que pertenece el empleado
+    client_id   = db.Column(db.Integer, db.ForeignKey('clients.id'))
+    client      = db.relationship('Client', foreign_keys=[client_id])
+    # Ubicación: 'sitio' (local) | 'foraneo'
+    site_type   = db.Column(db.String(10), default='sitio')
+    address     = db.Column(db.Text)                # dirección cuando es foráneo
     assignments = db.relationship('Assignment', backref='employee', lazy=True,
                                   order_by='Assignment.assigned_date.desc()')
 
     @property
     def current_assets(self):
         return Assignment.query.filter_by(employee_id=self.id, returned_date=None).all()
+
+    @property
+    def wa_link(self):
+        """URL de WhatsApp para abrir chat directo."""
+        num = self.whatsapp or self.phone or ''
+        clean = ''.join(c for c in num if c.isdigit())
+        return f'https://wa.me/{clean}' if clean else None
 
     def __repr__(self):
         return f'<Employee {self.employee_id} - {self.name}>'
@@ -930,3 +945,166 @@ def log_action(action, entity_type, entity_id=None, entity_name=None, details=No
         ip_address=ip,
     )
     db.session.add(entry)
+
+
+# ── Performance Evaluation ────────────────────────────────────────────────────
+
+EVAL_SCORE_LABELS = {
+    5: 'Sobresaliente',
+    4: 'Notable',
+    3: 'Adecuado',
+    2: 'Deficiente',
+    1: 'Insuficiente',
+}
+
+# Fixed competencies seeded into every new evaluation
+EVAL_COMPETENCIES = [
+    ('Dirección y Asignación de Responsabilidades',
+     'Establece y supervisa que las normas y los altos estándares de desempeño se cumplan '
+     'de acuerdo a sus instrucciones. Señala las acciones a seguir ante el bajo desempeño.'),
+    ('Liderazgo de Equipo',
+     'Obtiene los recursos necesarios para el grupo, para asegurar que los objetivos se '
+     'cumplan en tiempo y calidad, fomentando el trabajo en equipo.'),
+    ('Desarrollo de Otros',
+     'Proporciona retroalimentación continua, promoviendo el aprendizaje y el desarrollo '
+     'de habilidades. Fomentando el análisis y la toma de decisiones.'),
+    ('Orientación al Logro',
+     'Cumple objetivos desafiantes implementando mejoras cuantificables y específicas.'),
+    ('Planeación',
+     'Mediante acciones concretas, establece planes para prevenir y minimizar los problemas '
+     'de corto plazo (de 0 a 3 meses).'),
+    ('Orientación al Cliente',
+     'Analiza los requerimientos de sus clientes y se esfuerza por generar valor a las '
+     'soluciones propuestas.'),
+    ('Entendimiento Interpersonal e Impacto',
+     'Logra impactar en aspectos muy específicos, tomando acciones para adaptar sus argumentos '
+     'y presentación al auditorio. Se anticipa a las posibles reacciones del mismo, '
+     'comprendiendo la intención del interlocutor.'),
+    ('Autoconfianza',
+     'Explícitamente, indica confianza en sus propias habilidades y discernimiento, se '
+     'considera como alguien que hace que sucedan las cosas, promotor u originador.'),
+    ('Conocimiento Organizacional',
+     'Reconoce las limitaciones organizacionales no expresadas, lo que es y no es posible '
+     'en ciertas épocas y puestos, utilizando la cultura corporativa que producirá la mejor '
+     'respuesta.'),
+    ('Pensamiento Analítico',
+     'Utiliza técnicas avanzadas de análisis para identificar varias soluciones posibles y '
+     'sopesar el valor de cada una.'),
+    ('Creatividad e Innovación',
+     'Redefine los problemas y los presenta de una manera poco convencional. Implementa '
+     'métodos, productos y procesos de trabajo innovadores de manera sistemática y continua '
+     'que generan valor a la compañía.'),
+]
+
+
+class Evaluation(db.Model):
+    """Evaluación de desempeño — conecta evaluado (User) con jefe inmediato (User)."""
+    __tablename__ = 'evaluations'
+
+    id              = db.Column(db.Integer, primary_key=True)
+    evaluatee_id    = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    chief_id        = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    period          = db.Column(db.String(20))          # ej. "2026"
+    empresa         = db.Column(db.String(150))
+    localidad       = db.Column(db.String(150))
+    nivel           = db.Column(db.String(100))
+    # Status: draft → open → completed
+    status          = db.Column(db.String(20), default='draft')
+    # Chief-only scores
+    knowledge_score  = db.Column(db.Float)              # 1-5
+    experience_score = db.Column(db.Float)              # 1-5
+    # Submission timestamps
+    employee_submitted_at = db.Column(db.DateTime)
+    chief_submitted_at    = db.Column(db.DateTime)
+    created_at      = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at      = db.Column(db.DateTime)
+
+    evaluatee   = db.relationship('User', foreign_keys=[evaluatee_id])
+    chief       = db.relationship('User', foreign_keys=[chief_id])
+    goals       = db.relationship('EvaluationGoal', backref='evaluation',
+                                  cascade='all,delete-orphan',
+                                  order_by='EvaluationGoal.order')
+    competencies = db.relationship('EvaluationCompetency', backref='evaluation',
+                                   cascade='all,delete-orphan',
+                                   order_by='EvaluationCompetency.order')
+
+    # ── Computed scores ───────────────────────────────────────────────
+    @property
+    def goals_avg(self):
+        """Promedio simple de scores del jefe en objetivos."""
+        scored = [g.chief_score for g in self.goals if g.chief_score is not None]
+        return round(sum(scored) / len(scored), 2) if scored else None
+
+    @property
+    def competencies_avg(self):
+        """Promedio simple de scores del jefe en competencias."""
+        scored = [c.chief_score for c in self.competencies if c.chief_score is not None]
+        return round(sum(scored) / len(scored), 2) if scored else None
+
+    @property
+    def final_score(self):
+        g  = self.goals_avg
+        sk = self.competencies_avg
+        kn = self.knowledge_score
+        ex = self.experience_score
+        if any(v is None for v in [g, sk, kn, ex]):
+            return None
+        return round(g * 0.65 + sk * 0.15 + kn * 0.10 + ex * 0.10, 2)
+
+    @property
+    def level_label(self):
+        s = self.final_score
+        if s is None:
+            return '—'
+        if s >= 5:
+            return 'Sobresaliente'
+        if s >= 4:
+            return 'Notable'
+        if s >= 3:
+            return 'Adecuado'
+        if s >= 2:
+            return 'Deficiente'
+        return 'Insuficiente'
+
+    @property
+    def employee_goals_avg(self):
+        """Promedio self-eval del empleado en objetivos."""
+        scored = [g.employee_score for g in self.goals if g.employee_score is not None]
+        return round(sum(scored) / len(scored), 2) if scored else None
+
+    @property
+    def employee_competencies_avg(self):
+        scored = [c.employee_score for c in self.competencies if c.employee_score is not None]
+        return round(sum(scored) / len(scored), 2) if scored else None
+
+    def __repr__(self):
+        return f'<Evaluation {self.id} evaluatee={self.evaluatee_id}>'
+
+
+class EvaluationGoal(db.Model):
+    """Objetivo definido por el jefe en una evaluación."""
+    __tablename__ = 'evaluation_goals'
+
+    id              = db.Column(db.Integer, primary_key=True)
+    evaluation_id   = db.Column(db.Integer, db.ForeignKey('evaluations.id'), nullable=False)
+    order           = db.Column(db.Integer, default=0)
+    category        = db.Column(db.String(100))         # Financiero, Operacional, etc.
+    description     = db.Column(db.Text)
+    weight          = db.Column(db.Integer, default=0)  # porcentaje (suma = 100)
+    period          = db.Column(db.String(50))          # ej. "Ene - Dic"
+    employee_score  = db.Column(db.Integer)             # 1-5 (self-eval)
+    chief_score     = db.Column(db.Integer)             # 1-5
+    comments        = db.Column(db.Text)
+
+
+class EvaluationCompetency(db.Model):
+    """Competencia pre-seeded en cada evaluación."""
+    __tablename__ = 'evaluation_competencies'
+
+    id              = db.Column(db.Integer, primary_key=True)
+    evaluation_id   = db.Column(db.Integer, db.ForeignKey('evaluations.id'), nullable=False)
+    order           = db.Column(db.Integer, default=0)
+    name            = db.Column(db.String(200))
+    description     = db.Column(db.Text)
+    employee_score  = db.Column(db.Integer)             # 1-5 (self-eval)
+    chief_score     = db.Column(db.Integer)             # 1-5
