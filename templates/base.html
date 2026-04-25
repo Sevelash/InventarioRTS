@@ -415,7 +415,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <!-- ── CSRF helper global para fetch() ────────────────────── -->
-<script>
+<script nonce="{{ csp_nonce }}">
 window._csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
 window.csrfFetch = function(url, opts={}) {
   opts.headers = Object.assign({ 'X-CSRFToken': window._csrf }, opts.headers || {});
@@ -424,7 +424,7 @@ window.csrfFetch = function(url, opts={}) {
 </script>
 
 <!-- ── Sidebar collapse + Flash auto-dismiss ──────────────── -->
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   // ── Sidebar ──────────────────────────────────────────────
   const STORAGE_KEY  = 'rts_sidebar_collapsed';
@@ -514,7 +514,7 @@ window.csrfFetch = function(url, opts={}) {
 </script>
 
 <!-- ── Global Search ──────────────────────────────────────── -->
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   const inp = document.getElementById('globalSearch');
   const box = document.getElementById('globalSearchResults');
@@ -581,5 +581,6 @@ window.csrfFetch = function(url, opts={}) {
 </script>
 
 {% block scripts %}{% endblock %}
+{# Nota: agrega nonce="{{ csp_nonce }}" a todos los <script nonce="{{ csp_nonce }}"> inline en los templates hijos #}
 </body>
 </html>

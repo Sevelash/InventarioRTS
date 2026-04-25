@@ -117,6 +117,12 @@ app.register_blueprint(repo_bp)
 from reports import reports_bp
 app.register_blueprint(reports_bp)
 
+# ── Jinja2: exponer g.csp_nonce en todos los templates ───────────────────────
+from flask import g as _flask_g
+@app.context_processor
+def inject_csp_nonce():
+    return {'csp_nonce': getattr(_flask_g, 'csp_nonce', '')}
+
 # ── Jinja2 custom filters ─────────────────────────────────────────────────────
 import json as _json_mod
 
@@ -130,6 +136,14 @@ def from_json_filter(value):
     except Exception:
         return []
 
+# ── Nonce por request para CSP ────────────────────────────────────────────
+import secrets as _sec_mod
+from flask import g as _g
+
+@app.before_request
+def generate_csp_nonce():
+    _g.csp_nonce = _sec_mod.token_hex(16)
+
 # ── Security headers ──────────────────────────────────────────────────────
 @app.after_request
 def set_security_headers(response):
@@ -140,13 +154,14 @@ def set_security_headers(response):
     response.headers['Permissions-Policy']        = 'geolocation=(), microphone=(), camera=()'
     if os.environ.get('FLASK_ENV') == 'production':
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    nonce = getattr(_g, 'csp_nonce', '')
     csp = (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net; "
-        "style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; "
-        "font-src 'self' fonts.gstatic.com cdn.jsdelivr.net; "
-        "img-src 'self' data:; "
-        "connect-src 'self';"
+        f"default-src 'self'; "
+        f"script-src 'self' 'nonce-{nonce}' cdn.jsdelivr.net; "
+        f"style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; "
+        f"font-src 'self' fonts.gstatic.com cdn.jsdelivr.net; "
+        f"img-src 'self' data:; "
+        f"connect-src 'self';"
     )
     response.headers['Content-Security-Policy'] = csp
     return response
@@ -663,7 +678,7 @@ def inventory_dashboard():
 # ── Assets ────────────────────────────────────────────────────────────────────
 
 @app.route('/assets')
-@login_required
+@module_required('inventory')
 def assets_list():
     q               = request.args.get('q', '')
     status_filter   = request.args.get('status', '')
@@ -698,6 +713,19 @@ def assets_list():
     pagination = query.order_by(Asset.asset_tag).paginate(page=page, per_page=per_page, error_out=False)
     assets     = pagination.items
     categories = Category.query.order_by(Category.name).all()
+
+    # ── Fix N+1: pre-cargar asignaciones activas en una sola query ────────────
+    asset_ids = [a.id for a in assets]
+    active_asns = {}
+    if asset_ids:
+        for asn in Assignment.query.filter(
+            Assignment.asset_id.in_(asset_ids),
+            Assignment.returned_date == None   # noqa: E711
+        ).all():
+            active_asns[asn.asset_id] = asn
+    for a in assets:
+        a._cached_assignment = active_asns.get(a.id)
+
     return render_template('assets/list.html', assets=assets, categories=categories,
                            q=q, status_filter=status_filter,
                            category_filter=category_filter, loc_filter=loc_filter,
@@ -705,7 +733,7 @@ def assets_list():
 
 
 @app.route('/api/assets/autocomplete')
-@login_required
+@module_required('inventory')
 def assets_autocomplete():
     """Devuelve sugerencias JSON para el buscador de activos."""
     q = request.args.get('q', '').strip()
@@ -752,7 +780,7 @@ def assets_autocomplete():
 
 
 @app.route('/assets/new', methods=['GET', 'POST'])
-@login_required
+@module_required('inventory')
 def asset_new():
     categories      = Category.query.order_by(Category.name).all()
     clients         = Client.query.filter_by(active=True).order_by(Client.name).all()
@@ -809,7 +837,7 @@ def asset_new():
 
 
 @app.route('/assets/<int:id>')
-@login_required
+@module_required('inventory')
 def asset_detail(id):
     asset      = Asset.query.get_or_404(id)
     return_url = request.args.get('return_url') or url_for('assets_list')
@@ -824,7 +852,7 @@ def asset_detail(id):
 
 
 @app.route('/assets/<int:id>/edit', methods=['GET', 'POST'])
-@login_required
+@module_required('inventory')
 def asset_edit(id):
     asset      = Asset.query.get_or_404(id)
     categories      = Category.query.order_by(Category.name).all()
@@ -891,7 +919,7 @@ def asset_edit(id):
 
 
 @app.route('/assets/<int:id>/delete', methods=['POST'])
-@login_required
+@module_required('inventory')
 def asset_delete(id):
     asset = Asset.query.get_or_404(id)
     name  = asset.name
@@ -907,7 +935,7 @@ def asset_delete(id):
 # ── Employees ─────────────────────────────────────────────────────────────────
 
 @app.route('/employees')
-@login_required
+@module_required('inventory')
 def employees_list():
     q             = request.args.get('q', '')
     show_inactive = request.args.get('inactive', '')
@@ -936,7 +964,7 @@ def employees_list():
 
 
 @app.route('/employees/new', methods=['GET', 'POST'])
-@login_required
+@module_required('inventory')
 def employee_new():
     clients = Client.query.order_by(Client.name).all()
     if request.method == 'POST':
@@ -969,7 +997,7 @@ def employee_new():
 
 
 @app.route('/employees/<int:id>/edit', methods=['GET', 'POST'])
-@login_required
+@module_required('inventory')
 def employee_edit(id):
     emp     = Employee.query.get_or_404(id)
     clients = Client.query.order_by(Client.name).all()
@@ -1006,7 +1034,7 @@ def employee_edit(id):
 
 
 @app.route('/employees/<int:id>/delete', methods=['POST'])
-@login_required
+@module_required('inventory')
 def employee_delete(id):
     emp  = Employee.query.get_or_404(id)
     name = emp.name
@@ -1019,7 +1047,7 @@ def employee_delete(id):
 
 
 @app.route('/employees/<int:id>/responsiva')
-@login_required
+@module_required('inventory')
 def employee_responsiva(id):
     """Show asset selection page for generating Carta de Resguardo."""
     emp = Employee.query.get_or_404(id)
@@ -1033,7 +1061,7 @@ def employee_responsiva(id):
 
 
 @app.route('/employees/<int:id>/responsiva/download', methods=['POST'])
-@login_required
+@module_required('inventory')
 def employee_responsiva_download(id):
     """Generate and return Carta de Resguardo as non-editable PDF."""
     from responsiva_pdf import generate_responsiva_pdf
@@ -1077,7 +1105,7 @@ def employee_responsiva_download(id):
 # ── Offboarding ───────────────────────────────────────────────────────────────
 
 @app.route('/employees/<int:id>/offboarding')
-@login_required
+@module_required('inventory')
 def employee_offboarding(id):
     """Pantalla de offboarding: muestra activos con depreciación y estado."""
     from offboarding_pdf import calc_depreciation, OFFBOARDING_REASONS
@@ -1101,7 +1129,7 @@ def employee_offboarding(id):
 
 
 @app.route('/employees/<int:id>/offboarding/pdf', methods=['POST'])
-@login_required
+@module_required('inventory')
 def employee_offboarding_pdf(id):
     """Genera el PDF de Acta de Entrega-Recepción."""
     from offboarding_pdf import (generate_offboarding_pdf,
@@ -1162,7 +1190,7 @@ def employee_offboarding_pdf(id):
 # ── Assignments ───────────────────────────────────────────────────────────────
 
 @app.route('/assignments')
-@login_required
+@module_required('inventory')
 def assignments_list():
     active_only = request.args.get('active', '1')
     query = Assignment.query
@@ -1174,7 +1202,7 @@ def assignments_list():
 
 
 @app.route('/assignments/new', methods=['GET', 'POST'])
-@login_required
+@module_required('inventory')
 def assignment_new():
     assets    = Asset.query.filter_by(status='available').order_by(Asset.name).all()
     employees = Employee.query.filter_by(active=True).order_by(Employee.name).all()
@@ -1206,7 +1234,7 @@ def assignment_new():
 
 
 @app.route('/assignments/<int:id>/return', methods=['POST'])
-@login_required
+@module_required('inventory')
 def assignment_return(id):
     assignment = Assignment.query.get_or_404(id)
     if assignment.returned_date:
@@ -1731,14 +1759,14 @@ def license_delete(id):
 # ── Categories ────────────────────────────────────────────────────────────────
 
 @app.route('/categories')
-@login_required
+@module_required('inventory')
 def categories_list():
     categories = Category.query.order_by(Category.name).all()
     return render_template('categories/list.html', categories=categories)
 
 
 @app.route('/categories/new', methods=['GET', 'POST'])
-@login_required
+@module_required('inventory')
 def category_new():
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
@@ -1757,7 +1785,7 @@ def category_new():
 
 
 @app.route('/categories/<int:id>/edit', methods=['GET', 'POST'])
-@login_required
+@module_required('inventory')
 def category_edit(id):
     cat = Category.query.get_or_404(id)
     if request.method == 'POST':
@@ -1778,7 +1806,7 @@ def category_edit(id):
 
 
 @app.route('/categories/<int:id>/delete', methods=['POST'])
-@login_required
+@module_required('inventory')
 def category_delete(id):
     cat = Category.query.get_or_404(id)
     if cat.assets:
@@ -1796,7 +1824,7 @@ def category_delete(id):
 # ── Shipments (DHL / Foráneo) ─────────────────────────────────────────────────
 
 @app.route('/shipments')
-@login_required
+@module_required('inventory')
 def shipments_list():
     status_filter = request.args.get('status', '')
     query = Shipment.query
@@ -1812,7 +1840,7 @@ def shipments_list():
 
 @app.route('/shipments/new', methods=['GET', 'POST'])
 @app.route('/shipments/new/<int:asset_id>', methods=['GET', 'POST'])
-@login_required
+@module_required('inventory')
 def shipment_new(asset_id=None):
     foraneo_assets = Asset.query.filter(
         Asset.location_type.in_(['foraneo', 'hibrido'])
@@ -1854,14 +1882,14 @@ def shipment_new(asset_id=None):
 
 
 @app.route('/shipments/<int:id>')
-@login_required
+@module_required('inventory')
 def shipment_detail(id):
     shipment = Shipment.query.get_or_404(id)
     return render_template('shipments/detail.html', shipment=shipment)
 
 
 @app.route('/shipments/<int:id>/edit', methods=['GET', 'POST'])
-@login_required
+@module_required('inventory')
 def shipment_edit(id):
     shipment       = Shipment.query.get_or_404(id)
     foraneo_assets = Asset.query.filter(
@@ -1891,7 +1919,7 @@ def shipment_edit(id):
 
 
 @app.route('/shipments/<int:id>/delete', methods=['POST'])
-@login_required
+@module_required('inventory')
 def shipment_delete(id):
     shipment = Shipment.query.get_or_404(id)
     log_action('delete', 'shipment', entity_id=shipment.id,
@@ -1906,7 +1934,7 @@ def shipment_delete(id):
 # ── Package Tracking (AfterShip) ─────────────────────────────────────────────
 
 @app.route('/shipments/<int:id>/track', methods=['POST'])
-@login_required
+@module_required('inventory')
 @csrf.exempt   # llamado también vía fetch desde el detalle
 def shipment_track(id):
     """Rastrear un envío ahora mismo y actualizar su estado."""
@@ -1948,7 +1976,7 @@ def shipment_track(id):
 
 
 @app.route('/shipments/return/<int:asset_id>', methods=['GET', 'POST'])
-@login_required
+@module_required('inventory')
 def shipment_return(asset_id):
     """Create an inbound (return) shipment for an asset."""
     asset = Asset.query.get_or_404(asset_id)
@@ -2041,7 +2069,7 @@ def aftership_webhook():
 
 
 @app.route('/shipments/refresh-all', methods=['POST'])
-@login_required
+@module_required('inventory')
 def shipments_refresh_all():
     """Actualiza todos los envíos activos — llamado por el scheduler o manualmente."""
     import tracking as trk
@@ -2053,7 +2081,7 @@ def shipments_refresh_all():
 # ── Clients (Empresas) ────────────────────────────────────────────────────────
 
 @app.route('/clients')
-@login_required
+@module_required('inventory')
 def clients_list():
     q            = request.args.get('q', '')
     loc_filter   = request.args.get('location_type', '')
@@ -2102,7 +2130,7 @@ def _save_client_form(cli, form):
 
 
 @app.route('/clients/new', methods=['GET', 'POST'])
-@login_required
+@module_required('inventory')
 def client_new():
     if request.method == 'POST':
         cli    = Client(active=True)
@@ -2121,7 +2149,7 @@ def client_new():
 
 
 @app.route('/clients/<int:id>/edit', methods=['GET', 'POST'])
-@login_required
+@module_required('inventory')
 def client_edit(id):
     cli = Client.query.get_or_404(id)
     if request.method == 'POST':
@@ -2139,7 +2167,7 @@ def client_edit(id):
 
 
 @app.route('/clients/<int:id>/delete', methods=['POST'])
-@login_required
+@module_required('inventory')
 def client_delete(id):
     cli = Client.query.get_or_404(id)
     if cli.assets:
@@ -2154,7 +2182,7 @@ def client_delete(id):
 
 
 @app.route('/clients/import', methods=['GET', 'POST'])
-@login_required
+@module_required('inventory')
 def client_import():
     """Import clients from an Excel file (.xlsx)."""
     if request.method == 'POST':
@@ -2265,7 +2293,7 @@ def client_import():
 
 
 @app.route('/clients/import/template')
-@login_required
+@module_required('inventory')
 def client_import_template():
     """Download an Excel template for client import."""
     import io
@@ -2320,7 +2348,7 @@ def _save_doc_file(file_storage):
 # ── API: list + upload POs ────────────────────────────────────────────────────
 
 @app.route('/api/purchase-orders')
-@login_required
+@module_required('inventory')
 def api_purchase_orders():
     pos = PurchaseOrder.query.order_by(PurchaseOrder.created_at.desc()).all()
     return jsonify([{
@@ -2334,7 +2362,7 @@ def api_purchase_orders():
 
 
 @app.route('/api/purchase-orders/upload', methods=['POST'])
-@login_required
+@module_required('inventory')
 def api_po_upload():
     number  = request.form.get('number', '').strip()
     if not number:
@@ -2360,7 +2388,7 @@ def api_po_upload():
 
 
 @app.route('/api/invoices')
-@login_required
+@module_required('inventory')
 def api_invoices():
     invs = Invoice.query.order_by(Invoice.created_at.desc()).all()
     return jsonify([{
@@ -2374,7 +2402,7 @@ def api_invoices():
 
 
 @app.route('/api/invoices/upload', methods=['POST'])
-@login_required
+@module_required('inventory')
 def api_invoice_upload():
     number = request.form.get('number', '').strip()
     if not number:
@@ -2400,7 +2428,7 @@ def api_invoice_upload():
 
 
 @app.route('/documents/po/<int:id>')
-@login_required
+@module_required('inventory')
 def document_po_view(id):
     po = PurchaseOrder.query.get_or_404(id)
     if not po.file_path or not os.path.exists(po.file_path):
@@ -2412,7 +2440,7 @@ def document_po_view(id):
 
 
 @app.route('/documents/invoice/<int:id>')
-@login_required
+@module_required('inventory')
 def document_invoice_view(id):
     inv = Invoice.query.get_or_404(id)
     if not inv.file_path or not os.path.exists(inv.file_path):
@@ -2979,7 +3007,7 @@ def setup_absolute():
 
 
 @app.route('/assets/<int:id>/absolute/search-serial', methods=['POST'])
-@login_required
+@module_required('inventory')
 def asset_absolute_search(id):
     """Busca el activo en Absolute por su número de serie y devuelve candidatos."""
     from absolute import AbsoluteError, parse_device
@@ -3012,7 +3040,7 @@ def asset_absolute_search(id):
 
 
 @app.route('/assets/<int:id>/absolute/link', methods=['POST'])
-@login_required
+@module_required('inventory')
 def asset_absolute_link(id):
     """Liga el activo a un Device UID de Absolute y hace el primer sync."""
     from absolute import AbsoluteError, parse_device
@@ -3047,7 +3075,7 @@ def asset_absolute_link(id):
 
 
 @app.route('/assets/<int:id>/absolute/sync', methods=['POST'])
-@login_required
+@module_required('inventory')
 def asset_absolute_sync(id):
     """Sincroniza datos del activo desde Absolute."""
     from absolute import AbsoluteError, parse_device
@@ -3078,7 +3106,7 @@ def asset_absolute_sync(id):
 
 
 @app.route('/assets/<int:id>/absolute/unlink', methods=['POST'])
-@login_required
+@module_required('inventory')
 def asset_absolute_unlink(id):
     """Desliga el activo de Absolute (solo borra el vínculo local)."""
     asset = Asset.query.get_or_404(id)

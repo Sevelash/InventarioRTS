@@ -319,7 +319,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 function addTask() {
   const tbody = document.getElementById('plan-body');
   const tr = document.createElement('tr');

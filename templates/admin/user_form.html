@@ -124,7 +124,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 // When role is admin, dim the modules section (they get all access)
 const roleSelect = document.getElementById('roleSelect');
 const moduleSection = document.getElementById('moduleAccessSection');

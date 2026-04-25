@@ -207,7 +207,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 function updateWeightTotal() {
   const inputs = document.querySelectorAll('.weight-input');
   let total = 0;

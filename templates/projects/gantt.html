@@ -212,7 +212,7 @@
 
 {% block scripts %}
 {% if tasks_data %}
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   // ── Date helpers ──────────────────────────────────────────────────────
   const startDate  = new Date('{{ start }}');

@@ -578,7 +578,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 /* ── Absolute: buscar por serial ── */
 function searchAbsolute() {
   const btn = document.getElementById('abs-search-btn');

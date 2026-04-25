@@ -87,7 +87,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // Auto-submit when 6 digits entered
 document.getElementById('codeInput').addEventListener('input', function () {
   if (this.value.replace(/\D/g, '').length === 6) {

@@ -161,7 +161,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 // Populate modal with slug & module name when "Request Access" is clicked
 document.querySelectorAll('[data-slug]').forEach(btn => {
   btn.addEventListener('click', () => {

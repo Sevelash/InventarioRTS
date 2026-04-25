@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
+from functools import cached_property
 
 db = SQLAlchemy()
 
@@ -368,6 +369,9 @@ class Asset(db.Model):
 
     @property
     def current_assignment(self):
+        # Si la vista pre-cargó la asignación, usar el caché (evita N+1)
+        if hasattr(self, '_cached_assignment'):
+            return self._cached_assignment
         return Assignment.query.filter_by(asset_id=self.id, returned_date=None).first()
 
     @property
@@ -1028,20 +1032,20 @@ class Evaluation(db.Model):
                                    cascade='all,delete-orphan',
                                    order_by='EvaluationCompetency.order')
 
-    # ── Computed scores ───────────────────────────────────────────────
-    @property
+    # ── Computed scores (cached_property: se calcula una sola vez por request) ─
+    @cached_property
     def goals_avg(self):
         """Promedio simple de scores del jefe en objetivos."""
         scored = [g.chief_score for g in self.goals if g.chief_score is not None]
         return round(sum(scored) / len(scored), 2) if scored else None
 
-    @property
+    @cached_property
     def competencies_avg(self):
         """Promedio simple de scores del jefe en competencias."""
         scored = [c.chief_score for c in self.competencies if c.chief_score is not None]
         return round(sum(scored) / len(scored), 2) if scored else None
 
-    @property
+    @cached_property
     def final_score(self):
         g  = self.goals_avg
         sk = self.competencies_avg
@@ -1051,7 +1055,7 @@ class Evaluation(db.Model):
             return None
         return round(g * 0.65 + sk * 0.15 + kn * 0.10 + ex * 0.10, 2)
 
-    @property
+    @cached_property
     def level_label(self):
         s = self.final_score
         if s is None:
@@ -1066,13 +1070,13 @@ class Evaluation(db.Model):
             return 'Deficiente'
         return 'Insuficiente'
 
-    @property
+    @cached_property
     def employee_goals_avg(self):
         """Promedio self-eval del empleado en objetivos."""
         scored = [g.employee_score for g in self.goals if g.employee_score is not None]
         return round(sum(scored) / len(scored), 2) if scored else None
 
-    @property
+    @cached_property
     def employee_competencies_avg(self):
         scored = [c.employee_score for c in self.competencies if c.employee_score is not None]
         return round(sum(scored) / len(scored), 2) if scored else None

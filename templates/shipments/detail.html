@@ -334,7 +334,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 async function trackNow(id) {
   const btn = document.getElementById('trackNowBtn');
   btn.disabled = true;

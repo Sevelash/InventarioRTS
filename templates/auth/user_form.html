@@ -119,7 +119,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const roleSelect = document.getElementById('roleSelect');
 const moduleCard = document.getElementById('moduleAccessCard');
 function updateModules() {

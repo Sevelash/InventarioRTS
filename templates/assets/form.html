@@ -421,7 +421,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // ── Location type toggle ──────────────────────────────────
   document.querySelectorAll('input[name="location_type"]').forEach(r => {
     r.addEventListener('change', () => {

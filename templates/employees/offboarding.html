@@ -303,7 +303,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 // ── Datos base de depreciación (precalculados del servidor) ──────────────────
 const ASSET_DATA = {
   {% for asset in assets %}

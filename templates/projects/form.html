@@ -160,7 +160,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const slider = document.getElementById('progressSlider');
 const val    = document.getElementById('progressVal');
 if (slider) {

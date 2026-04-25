@@ -96,7 +96,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const fileInput  = document.getElementById('fileInput');
 const preview    = document.getElementById('filePreview');
 const fileName   = document.getElementById('fileName');

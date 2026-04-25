@@ -517,7 +517,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 /* Recalcular score global en tiempo real cuando el jefe edita */
 {% if not readonly_chief %}
 function recalcGlobal() {

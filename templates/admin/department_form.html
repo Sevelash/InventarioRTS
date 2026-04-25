@@ -86,7 +86,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const colorInput = document.querySelector('input[type="color"]');
 const hexInput   = document.getElementById('colorHex');
 colorInput.addEventListener('input', () => { hexInput.value = colorInput.value; });

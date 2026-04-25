@@ -142,7 +142,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const p1 = document.getElementById('pwd1');
 const p2 = document.getElementById('pwd2');
 const hint = document.getElementById('pwdMatch');

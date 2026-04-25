@@ -280,7 +280,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 // Toggle sección Microsoft
 const msCheck = document.getElementById('is_microsoft');
 const msFields = document.getElementById('ms-fields');

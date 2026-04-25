@@ -212,7 +212,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // Highlight selected location type button
   document.querySelectorAll('input[name="location_type"]').forEach(r => {
     const updateLabels = () => {

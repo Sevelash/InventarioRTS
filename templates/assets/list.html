@@ -306,7 +306,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // ── Search enter key ─────────────────────────────────────────
   document.getElementById('searchInput').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
@@ -388,7 +388,7 @@
   });
 </script>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 /* ── Autocompletado del buscador de activos ── */
 (function () {
   const input   = document.getElementById('searchInput');
