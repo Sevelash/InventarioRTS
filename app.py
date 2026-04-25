@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
-from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action, ALL_MODULES, Department, AccessRequest, Supplier, Brand, IDConfig, PurchaseOrder, Invoice
+from models import db, Asset, Category, Client, Employee, Assignment, Shipment, AuditLog, log_action, ALL_MODULES, Department, AccessRequest, Supplier, Brand, IDConfig, PurchaseOrder, Invoice, Maintenance, License, LicenseAssignment, AppSetting
 from datetime import datetime, date, timedelta
 from i18n import get_translations, SUPPORTED_LANGS, DEFAULT_LANG
 import os
@@ -38,6 +38,28 @@ csrf.init_app(app)
 limiter.init_app(app)
 
 db.init_app(app)
+
+# ── Búsqueda sin tildes: función SQLite personalizada ─────────────────────────
+import unicodedata as _ucd
+from sqlalchemy import event as _sa_event
+from sqlalchemy.engine import Engine as _Engine
+
+def _nrm(text):
+    """Normaliza texto: minúsculas + quita acentos/diacríticos."""
+    if text is None:
+        return ''
+    return ''.join(
+        c for c in _ucd.normalize('NFD', str(text).lower())
+        if _ucd.category(c) != 'Mn'
+    )
+
+@_sa_event.listens_for(_Engine, 'connect')
+def _register_sqlite_nrm(dbapi_conn, _rec):
+    """Registra nrm() en cada conexión SQLite nueva."""
+    try:
+        dbapi_conn.create_function('nrm', 1, _nrm)
+    except Exception:
+        pass
 
 # ── Auth blueprint ────────────────────────────────────────────────────────────
 from auth import auth_bp, login_required, module_required, admin_required
@@ -177,6 +199,87 @@ with app.app_context():
     # Purchase orders & invoices FK on assets
     _add_col_if_missing('assets', 'purchase_order_id', 'INTEGER')
     _add_col_if_missing('assets', 'invoice_id',        'INTEGER')
+
+    # Maintenance table — created by db.create_all(); ensure all columns exist
+    for col, typ in [
+        ('ticket_folio',        'VARCHAR(50)'),
+        ('maintenance_type',    'VARCHAR(20)'),
+        ('status',              'VARCHAR(20)'),
+        ('prev_asset_status',   'VARCHAR(30)'),
+        ('reported_date',       'DATE'),
+        ('reported_by',         'VARCHAR(150)'),
+        ('process_name',        'VARCHAR(150)'),
+        ('process_responsible', 'VARCHAR(150)'),
+        ('nc_source',           'VARCHAR(100)'),
+        ('description',         'TEXT'),
+        ('analysis_method',     'VARCHAR(150)'),
+        ('participants',        'VARCHAR(300)'),
+        ('root_cause_analysis', 'TEXT'),
+        ('root_cause',          'TEXT'),
+        ('correction_desc',     'TEXT'),
+        ('action_plan',         'TEXT'),
+        ('proposed_close_date', 'DATE'),
+        ('followup_responsible','VARCHAR(150)'),
+        ('close_responsible',   'VARCHAR(150)'),
+        ('effectiveness_ok',    'INTEGER'),
+        ('effectiveness_notes', 'TEXT'),
+        ('actual_close_date',   'DATE'),
+        ('document_path',       'VARCHAR(500)'),
+        ('document_name',       'VARCHAR(200)'),
+        ('photos',              'TEXT'),
+        ('notes',               'TEXT'),
+        ('created_at',          'DATETIME'),
+        ('updated_at',          'DATETIME'),
+    ]:
+        _add_col_if_missing('maintenance', col, typ)
+
+    # Licenses tables — created by db.create_all(); ensure all columns exist
+    for col, typ in [
+        ('name',            'VARCHAR(200)'),
+        ('vendor',          'VARCHAR(100)'),
+        ('software',        'VARCHAR(150)'),
+        ('category',        'VARCHAR(50)'),
+        ('license_type',    'VARCHAR(30)'),
+        ('license_key',     'VARCHAR(500)'),
+        ('is_microsoft',    'INTEGER DEFAULT 0'),
+        ('tenant_id',       'VARCHAR(100)'),
+        ('tenant_name',     'VARCHAR(200)'),
+        ('tenant_domain',   'VARCHAR(200)'),
+        ('subscription_id', 'VARCHAR(100)'),
+        ('sku_name',        'VARCHAR(100)'),
+        ('seat_count',      'INTEGER'),
+        ('purchase_cost',   'REAL'),
+        ('renewal_cost',    'REAL'),
+        ('currency',        "VARCHAR(10) DEFAULT 'MXN'"),
+        ('purchase_date',   'DATE'),
+        ('expiry_date',     'DATE'),
+        ('renewal_date',    'DATE'),
+        ('status',          "VARCHAR(20) DEFAULT 'active'"),
+        ('notes',           'TEXT'),
+        ('created_at',      'DATETIME'),
+        ('updated_at',      'DATETIME'),
+    ]:
+        _add_col_if_missing('licenses', col, typ)
+
+    for col, typ in [
+        ('license_id',    'INTEGER'),
+        ('employee_id',   'INTEGER'),
+        ('asset_id',      'INTEGER'),
+        ('assigned_date', 'DATE'),
+        ('notes',         'TEXT'),
+        ('created_at',    'DATETIME'),
+    ]:
+        _add_col_if_missing('license_assignments', col, typ)
+
+    # Absolute fields on assets
+    for col, typ in [
+        ('absolute_id',        'VARCHAR(100)'),
+        ('absolute_status',    'VARCHAR(30)'),
+        ('absolute_username',  'VARCHAR(150)'),
+        ('absolute_last_seen', 'DATETIME'),
+        ('absolute_sync_at',   'DATETIME'),
+    ]:
+        _add_col_if_missing('assets', col, typ)
 
     # Seed IT department if none exist
     from models import Department
@@ -474,13 +577,23 @@ def assets_list():
     loc_filter      = request.args.get('location_type', '')
     query = Asset.query
     if q:
-        like = f'%{q}%'
+        nq   = _nrm(q)          # query normalizado (sin tildes, minúsculas)
+        like = f'%{nq}%'
+        nrm  = db.func.nrm      # función SQLite registrada
+        # Buscar también por nombre de empleado asignado
+        emp_asset_ids = db.session.query(Assignment.asset_id).join(
+            Employee, Assignment.employee_id == Employee.id
+        ).filter(
+            Assignment.returned_date == None,   # noqa: E711
+            nrm(Employee.name).like(like)
+        ).subquery()
         query = query.outerjoin(Client, Asset.client_id == Client.id).filter(db.or_(
-            Asset.name.ilike(like), Asset.asset_tag.ilike(like),
-            Asset.serial_number.ilike(like), Asset.manufacturer.ilike(like),
-            Asset.model.ilike(like), Asset.supplier.ilike(like),
-            Asset.location.ilike(like), Asset.cpu.ilike(like),
-            Asset.ram.ilike(like), Client.name.ilike(like),
+            nrm(Asset.name).like(like),        nrm(Asset.asset_tag).like(like),
+            nrm(Asset.serial_number).like(like), nrm(Asset.manufacturer).like(like),
+            nrm(Asset.model).like(like),       nrm(Asset.supplier).like(like),
+            nrm(Asset.location).like(like),    nrm(Asset.cpu).like(like),
+            nrm(Asset.ram).like(like),         nrm(Client.name).like(like),
+            Asset.id.in_(emp_asset_ids),
         ))
     if status_filter:
         query = query.filter_by(status=status_filter)
@@ -497,6 +610,55 @@ def assets_list():
                            q=q, status_filter=status_filter,
                            category_filter=category_filter, loc_filter=loc_filter,
                            pagination=pagination)
+
+
+@app.route('/api/assets/autocomplete')
+@login_required
+def assets_autocomplete():
+    """Devuelve sugerencias JSON para el buscador de activos."""
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    nq   = _nrm(q)
+    like = f'%{nq}%'
+    nrm  = db.func.nrm
+
+    # Búsqueda directa por campos del activo
+    direct = Asset.query.outerjoin(Client, Asset.client_id == Client.id).filter(db.or_(
+        nrm(Asset.name).like(like),        nrm(Asset.asset_tag).like(like),
+        nrm(Asset.serial_number).like(like), nrm(Asset.manufacturer).like(like),
+        nrm(Asset.model).like(like),       nrm(Asset.supplier).like(like),
+        nrm(Client.name).like(like),
+    )).limit(10).all()
+
+    # Búsqueda por empleado asignado
+    by_emp = Asset.query.join(Assignment, Asset.id == Assignment.asset_id).join(
+        Employee, Assignment.employee_id == Employee.id
+    ).filter(
+        Assignment.returned_date == None,   # noqa: E711
+        nrm(Employee.name).like(like)
+    ).limit(6).all()
+
+    seen = set()
+    results = []
+    for a in direct + by_emp:
+        if a.id in seen:
+            continue
+        seen.add(a.id)
+        # Empleado asignado actualmente
+        asn = Assignment.query.filter_by(asset_id=a.id, returned_date=None).first()
+        emp = asn.employee.name if asn and asn.employee else None
+        results.append({
+            'id':       a.id,
+            'name':     a.name,
+            'tag':      a.asset_tag or '',
+            'serial':   a.serial_number or '',
+            'employee': emp or '',
+            'status':   a.status,
+            'url':      url_for('asset_detail', id=a.id),
+        })
+
+    return jsonify(results[:12])
 
 
 @app.route('/assets/new', methods=['GET', 'POST'])
@@ -566,8 +728,9 @@ def asset_detail(id):
         AuditLog.entity_type == 'asset',
         AuditLog.entity_id   == id,
     ).order_by(AuditLog.created_at.desc()).limit(50).all()
+    abs_configured = bool(AppSetting.get('absolute_token_id'))
     return render_template('assets/detail.html', asset=asset, return_url=return_url,
-                           history=history)
+                           history=history, absolute_configured=abs_configured)
 
 
 @app.route('/assets/<int:id>/edit', methods=['GET', 'POST'])
@@ -662,10 +825,12 @@ def employees_list():
     if not show_inactive:
         query = query.filter_by(active=True)
     if q:
-        like = f'%{q}%'
+        nq   = _nrm(q)
+        like = f'%{nq}%'
+        nrm  = db.func.nrm
         query = query.filter(db.or_(
-            Employee.name.ilike(like), Employee.employee_id.ilike(like),
-            Employee.department.ilike(like), Employee.email.ilike(like)
+            nrm(Employee.name).like(like),        nrm(Employee.employee_id).like(like),
+            nrm(Employee.department).like(like),  nrm(Employee.email).like(like),
         ))
     page       = request.args.get('page', 1, type=int)
     pagination = query.order_by(Employee.name).paginate(page=page, per_page=50, error_out=False)
@@ -741,6 +906,147 @@ def employee_delete(id):
     return redirect(url_for('employees_list'))
 
 
+@app.route('/employees/<int:id>/responsiva')
+@login_required
+def employee_responsiva(id):
+    """Show asset selection page for generating Carta de Resguardo."""
+    emp = Employee.query.get_or_404(id)
+    # Get current active assignments (not returned)
+    active_assignments = Assignment.query.filter_by(
+        employee_id=emp.id, returned_date=None
+    ).all()
+    assets = [a.asset for a in active_assignments]
+    return render_template('employees/responsiva.html', employee=emp,
+                           assets=assets)
+
+
+@app.route('/employees/<int:id>/responsiva/download', methods=['POST'])
+@login_required
+def employee_responsiva_download(id):
+    """Generate and return Carta de Resguardo as non-editable PDF."""
+    from responsiva_pdf import generate_responsiva_pdf
+    emp = Employee.query.get_or_404(id)
+
+    # Selected asset IDs from checkboxes
+    selected_ids = request.form.getlist('asset_ids', type=int)
+    if not selected_ids:
+        flash('Selecciona al menos un activo para generar la carta.', 'warning')
+        return redirect(url_for('employee_responsiva', id=id))
+
+    assets = Asset.query.filter(Asset.id.in_(selected_ids)).all()
+    if not assets:
+        flash('No se encontraron los activos seleccionados.', 'danger')
+        return redirect(url_for('employee_responsiva', id=id))
+
+    # Use assignment date of earliest selected assignment, or today
+    earliest = Assignment.query.filter(
+        Assignment.employee_id == emp.id,
+        Assignment.asset_id.in_(selected_ids),
+        Assignment.returned_date == None
+    ).order_by(Assignment.assigned_date.asc()).first()
+    assign_date = earliest.assigned_date if earliest else date.today()
+
+    buf = generate_responsiva_pdf(emp, assets, assign_date=assign_date)
+
+    safe_name = emp.name.replace(' ', '_')
+    filename = f'Responsiva_{safe_name}_{assign_date.strftime("%Y%m%d")}.pdf'
+
+    log_action('export', 'employee', entity_id=emp.id, entity_name=emp.name,
+               details=f'Carta de Resguardo PDF generada ({len(assets)} activos)')
+
+    return send_file(
+        buf,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/pdf'
+    )
+
+
+# ── Offboarding ───────────────────────────────────────────────────────────────
+
+@app.route('/employees/<int:id>/offboarding')
+@login_required
+def employee_offboarding(id):
+    """Pantalla de offboarding: muestra activos con depreciación y estado."""
+    from offboarding_pdf import calc_depreciation, OFFBOARDING_REASONS
+    emp = Employee.query.get_or_404(id)
+    active_assignments = Assignment.query.filter_by(
+        employee_id=emp.id, returned_date=None
+    ).all()
+    assets = [a.asset for a in active_assignments]
+
+    # Pre-calcula depreciación para cada activo (para mostrar en UI)
+    asset_deprs = {}
+    for a in assets:
+        asset_deprs[a.id] = calc_depreciation(
+            a.purchase_cost, a.purchase_date, a.asset_type or 'otro'
+        )
+
+    return render_template('employees/offboarding.html',
+                           employee=emp, assets=assets,
+                           asset_deprs=asset_deprs,
+                           reasons=OFFBOARDING_REASONS)
+
+
+@app.route('/employees/<int:id>/offboarding/pdf', methods=['POST'])
+@login_required
+def employee_offboarding_pdf(id):
+    """Genera el PDF de Acta de Entrega-Recepción."""
+    from offboarding_pdf import (generate_offboarding_pdf,
+                                 calc_depreciation, OFFBOARDING_REASONS)
+    emp = Employee.query.get_or_404(id)
+
+    selected_ids  = request.form.getlist('asset_ids', type=int)
+    reason        = request.form.get('reason', 'otro')
+    off_date_raw  = request.form.get('offboarding_date', '')
+    off_date      = _parse_date(off_date_raw) or date.today()
+    return_assets = 'return_assets' in request.form   # checkbox: marcar como devueltos
+
+    if not selected_ids:
+        flash('Selecciona al menos un activo.', 'warning')
+        return redirect(url_for('employee_offboarding', id=id))
+
+    assets = Asset.query.filter(Asset.id.in_(selected_ids)).all()
+
+    # Armar entries con condición y daño
+    asset_entries = []
+    for a in assets:
+        cond   = request.form.get(f'cond_{a.id}', 'bueno')
+        dnotes = request.form.get(f'dmg_{a.id}', '').strip()
+        depr   = calc_depreciation(a.purchase_cost, a.purchase_date, a.asset_type or 'otro',
+                                   as_of=off_date)
+        asset_entries.append({
+            'asset':        a,
+            'condition':    cond,
+            'damage_notes': dnotes,
+            'depr':         depr,
+        })
+
+    # Marcar activos como devueltos si se marcó el checkbox
+    if return_assets:
+        for a in assets:
+            asn = Assignment.query.filter_by(
+                asset_id=a.id, employee_id=emp.id, returned_date=None
+            ).first()
+            if asn:
+                asn.returned_date = off_date
+                a.status = asn.asset.status if asn.asset.status != 'in_use' else 'available'
+                a.status = 'available'
+        db.session.commit()
+
+    buf = generate_offboarding_pdf(emp, asset_entries,
+                                   offboarding_date=off_date, reason=reason)
+
+    safe_name = emp.name.replace(' ', '_')
+    filename  = f'Offboarding_{safe_name}_{off_date.strftime("%Y%m%d")}.pdf'
+
+    log_action('export', 'employee', entity_id=emp.id, entity_name=emp.name,
+               details=f'Acta Offboarding PDF ({len(assets)} activos, devueltos={return_assets})')
+
+    return send_file(buf, as_attachment=True, download_name=filename,
+                     mimetype='application/pdf')
+
+
 # ── Assignments ───────────────────────────────────────────────────────────────
 
 @app.route('/assignments')
@@ -803,6 +1109,511 @@ def assignment_return(id):
     db.session.commit()
     flash(f'Activo "{assignment.asset.name}" devuelto correctamente.', 'success')
     return redirect(url_for('assignments_list'))
+
+
+# ── Maintenance ───────────────────────────────────────────────────────────────
+
+_MAINT_DIR = os.path.join(os.path.dirname(__file__), 'instance', 'uploads', 'maintenance')
+os.makedirs(_MAINT_DIR, exist_ok=True)
+
+
+@app.route('/maintenance')
+@login_required
+def maintenance_list():
+    status_filter = request.args.get('status', '')
+    type_filter   = request.args.get('type', '')
+    q = Maintenance.query
+    if status_filter:
+        q = q.filter_by(status=status_filter)
+    if type_filter:
+        q = q.filter_by(maintenance_type=type_filter)
+    records = q.order_by(Maintenance.created_at.desc()).all()
+    counts = {
+        'total':      Maintenance.query.count(),
+        'pendiente':  Maintenance.query.filter_by(status='pendiente').count(),
+        'en_proceso': Maintenance.query.filter_by(status='en_proceso').count(),
+        'completado': Maintenance.query.filter_by(status='completado').count(),
+        'cerrado':    Maintenance.query.filter_by(status='cerrado').count(),
+    }
+    return render_template('maintenance/list.html',
+                           records=records, counts=counts,
+                           status_filter=status_filter, type_filter=type_filter)
+
+
+@app.route('/maintenance/new', methods=['GET', 'POST'])
+@login_required
+def maintenance_new():
+    assets = Asset.query.filter(Asset.status != 'disposed').order_by(Asset.name).all()
+    pre_asset_id = request.args.get('asset_id', type=int)
+
+    if request.method == 'POST':
+        asset_id = request.form.get('asset_id', type=int)
+        asset = Asset.query.get_or_404(asset_id)
+
+        import json as _jm
+        from datetime import datetime as _dt
+
+        # Build action plan from dynamic rows
+        tasks        = request.form.getlist('task[]')
+        responsibles = request.form.getlist('task_responsible[]')
+        deadlines    = request.form.getlist('task_deadline[]')
+        plan = [{'task': t, 'responsible': r, 'deadline': d}
+                for t, r, d in zip(tasks, responsibles, deadlines) if t.strip()]
+
+        m = Maintenance(
+            asset_id            = asset_id,
+            ticket_folio        = request.form.get('ticket_folio', '').strip() or f'MNT-{date.today().strftime("%Y%m%d")}-{asset_id}',
+            maintenance_type    = request.form.get('maintenance_type', 'correctivo'),
+            status              = 'en_proceso',
+            prev_asset_status   = asset.status,
+            reported_date       = parse_date(request.form.get('reported_date')) or date.today(),
+            reported_by         = request.form.get('reported_by', '').strip(),
+            process_name        = request.form.get('process_name', '').strip(),
+            process_responsible = request.form.get('process_responsible', '').strip(),
+            nc_source           = request.form.get('nc_source', ''),
+            description         = request.form.get('description', '').strip(),
+            analysis_method     = request.form.get('analysis_method', '').strip(),
+            participants        = request.form.get('participants', '').strip(),
+            root_cause_analysis = request.form.get('root_cause_analysis', '').strip(),
+            root_cause          = request.form.get('root_cause', '').strip(),
+            correction_desc     = request.form.get('correction_desc', '').strip(),
+            action_plan         = _jm.dumps(plan, ensure_ascii=False),
+            proposed_close_date = parse_date(request.form.get('proposed_close_date')),
+            followup_responsible= request.form.get('followup_responsible', '').strip(),
+            close_responsible   = request.form.get('close_responsible', '').strip(),
+            notes               = request.form.get('notes', '').strip(),
+        )
+        # Change asset status to maintenance
+        asset.status = 'maintenance'
+        asset.last_maintenance = date.today()
+
+        db.session.add(m)
+        db.session.flush()  # get m.id
+
+        # Handle photo uploads
+        _maintenance_save_photos(m, request.files.getlist('photos_antes'), 'antes')
+        _maintenance_save_photos(m, request.files.getlist('photos_despues'), 'despues')
+
+        log_action('create', 'maintenance', entity_id=m.id,
+                   entity_name=f'{m.ticket_folio} — {asset.name}',
+                   details=f'Tipo: {m.maintenance_type} | Activo: {asset.asset_tag}')
+        db.session.commit()
+        flash(f'Ticket {m.ticket_folio} creado. Activo "{asset.name}" marcado como En Mantenimiento.', 'success')
+        return redirect(url_for('maintenance_detail', id=m.id))
+
+    return render_template('maintenance/form.html',
+                           record=None, assets=assets, pre_asset_id=pre_asset_id,
+                           type_choices=Maintenance.TYPE_CHOICES,
+                           nc_sources=Maintenance.NC_SOURCES)
+
+
+def _maintenance_save_photos(record, files, photo_type):
+    """Save uploaded photos to disk and append to record.photos JSON."""
+    import json as _jm, uuid
+    current = record.photos_list
+    for f in files:
+        if not f or not f.filename:
+            continue
+        ext  = os.path.splitext(f.filename)[1].lower()
+        if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic'):
+            continue
+        fname = f'{record.id}_{photo_type}_{uuid.uuid4().hex[:8]}{ext}'
+        fpath = os.path.join(_MAINT_DIR, fname)
+        f.save(fpath)
+        current.append({'path': fname, 'name': f.filename,
+                        'photo_type': photo_type, 'caption': ''})
+    record.photos = _jm.dumps(current, ensure_ascii=False)
+
+
+@app.route('/maintenance/<int:id>')
+@login_required
+def maintenance_detail(id):
+    m = Maintenance.query.get_or_404(id)
+    return render_template('maintenance/detail.html', record=m,
+                           type_choices=Maintenance.TYPE_CHOICES,
+                           nc_sources=Maintenance.NC_SOURCES)
+
+
+@app.route('/maintenance/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def maintenance_edit(id):
+    m    = Maintenance.query.get_or_404(id)
+    assets = Asset.query.filter(Asset.status != 'disposed').order_by(Asset.name).all()
+
+    if request.method == 'POST':
+        import json as _jm
+        tasks        = request.form.getlist('task[]')
+        responsibles = request.form.getlist('task_responsible[]')
+        deadlines    = request.form.getlist('task_deadline[]')
+        plan = [{'task': t, 'responsible': r, 'deadline': d}
+                for t, r, d in zip(tasks, responsibles, deadlines) if t.strip()]
+
+        eff = request.form.get('effectiveness_ok')
+
+        m.ticket_folio         = request.form.get('ticket_folio', m.ticket_folio).strip()
+        m.maintenance_type     = request.form.get('maintenance_type', m.maintenance_type)
+        m.reported_date        = parse_date(request.form.get('reported_date')) or m.reported_date
+        m.reported_by          = request.form.get('reported_by', '').strip()
+        m.process_name         = request.form.get('process_name', '').strip()
+        m.process_responsible  = request.form.get('process_responsible', '').strip()
+        m.nc_source            = request.form.get('nc_source', '')
+        m.description          = request.form.get('description', '').strip()
+        m.analysis_method      = request.form.get('analysis_method', '').strip()
+        m.participants         = request.form.get('participants', '').strip()
+        m.root_cause_analysis  = request.form.get('root_cause_analysis', '').strip()
+        m.root_cause           = request.form.get('root_cause', '').strip()
+        m.correction_desc      = request.form.get('correction_desc', '').strip()
+        m.action_plan          = _jm.dumps(plan, ensure_ascii=False)
+        m.proposed_close_date  = parse_date(request.form.get('proposed_close_date'))
+        m.followup_responsible = request.form.get('followup_responsible', '').strip()
+        m.close_responsible    = request.form.get('close_responsible', '').strip()
+        m.effectiveness_ok     = True if eff == '1' else (False if eff == '0' else None)
+        m.effectiveness_notes  = request.form.get('effectiveness_notes', '').strip()
+        m.notes                = request.form.get('notes', '').strip()
+        m.updated_at           = datetime.utcnow()
+
+        # New photos
+        _maintenance_save_photos(m, request.files.getlist('photos_antes'), 'antes')
+        _maintenance_save_photos(m, request.files.getlist('photos_despues'), 'despues')
+
+        log_action('update', 'maintenance', entity_id=m.id,
+                   entity_name=m.ticket_folio,
+                   details=f'Mantenimiento actualizado')
+        db.session.commit()
+        flash('Ticket de mantenimiento actualizado.', 'success')
+        return redirect(url_for('maintenance_detail', id=m.id))
+
+    return render_template('maintenance/form.html',
+                           record=m, assets=assets, pre_asset_id=m.asset_id,
+                           type_choices=Maintenance.TYPE_CHOICES,
+                           nc_sources=Maintenance.NC_SOURCES)
+
+
+@app.route('/maintenance/<int:id>/status', methods=['POST'])
+@login_required
+def maintenance_status(id):
+    m      = Maintenance.query.get_or_404(id)
+    new_st = request.form.get('status')
+    if new_st not in [s for s, _ in Maintenance.STATUS_CHOICES]:
+        flash('Estado inválido.', 'danger')
+        return redirect(url_for('maintenance_detail', id=id))
+
+    m.status = new_st
+    if new_st == 'cerrado':
+        m.actual_close_date = date.today()
+        # Restore asset to previous status (or 'available' if unknown)
+        restore = m.prev_asset_status or 'available'
+        if restore == 'maintenance':
+            restore = 'available'
+        m.asset.status = restore
+        flash(f'Ticket cerrado. Activo "{m.asset.name}" restaurado a "{restore}".', 'success')
+    elif new_st == 'en_proceso':
+        m.asset.status = 'maintenance'
+        flash('Ticket marcado como En Proceso.', 'info')
+    else:
+        flash(f'Estado actualizado a {m.status_label}.', 'info')
+
+    log_action('update', 'maintenance', entity_id=m.id,
+               entity_name=m.ticket_folio,
+               details=f'Estado → {new_st}')
+    db.session.commit()
+    return redirect(url_for('maintenance_detail', id=id))
+
+
+@app.route('/maintenance/<int:id>/upload-document', methods=['POST'])
+@login_required
+def maintenance_upload_doc(id):
+    m = Maintenance.query.get_or_404(id)
+    f = request.files.get('document')
+    if not f or not f.filename:
+        flash('No se seleccionó ningún archivo.', 'warning')
+        return redirect(url_for('maintenance_detail', id=id))
+    import uuid
+    ext   = os.path.splitext(f.filename)[1].lower()
+    fname = f'doc_{id}_{uuid.uuid4().hex[:8]}{ext}'
+    fpath = os.path.join(_MAINT_DIR, fname)
+    f.save(fpath)
+    m.document_path = fname
+    m.document_name = f.filename
+    db.session.commit()
+    flash('Formato de mantenimiento subido correctamente.', 'success')
+    return redirect(url_for('maintenance_detail', id=id))
+
+
+@app.route('/maintenance/<int:id>/document')
+@login_required
+def maintenance_download_doc(id):
+    m = Maintenance.query.get_or_404(id)
+    if not m.document_path:
+        flash('No hay documento adjunto.', 'warning')
+        return redirect(url_for('maintenance_detail', id=id))
+    fpath = os.path.join(_MAINT_DIR, m.document_path)
+    return send_file(fpath, download_name=m.document_name or m.document_path, as_attachment=True)
+
+
+@app.route('/maintenance/<int:id>/photo/<int:idx>')
+@login_required
+def maintenance_photo(id, idx):
+    m = Maintenance.query.get_or_404(id)
+    photos = m.photos_list
+    if idx >= len(photos):
+        return 'Not found', 404
+    fpath = os.path.join(_MAINT_DIR, photos[idx]['path'])
+    return send_file(fpath)
+
+
+@app.route('/maintenance/<int:id>/delete-photo/<int:idx>', methods=['POST'])
+@login_required
+def maintenance_delete_photo(id, idx):
+    import json as _jm
+    m      = Maintenance.query.get_or_404(id)
+    photos = m.photos_list
+    if 0 <= idx < len(photos):
+        removed = photos.pop(idx)
+        try:
+            os.remove(os.path.join(_MAINT_DIR, removed['path']))
+        except OSError:
+            pass
+        m.photos = _jm.dumps(photos, ensure_ascii=False)
+        db.session.commit()
+    return redirect(url_for('maintenance_detail', id=id))
+
+
+@app.route('/maintenance/<int:id>/pdf')
+@login_required
+def maintenance_pdf(id):
+    """Genera el FO-SGSI-20 pre-llenado con los datos del ticket."""
+    from maintenance_pdf import generate_fo_sgsi20
+    m   = Maintenance.query.get_or_404(id)
+    buf = generate_fo_sgsi20(m)
+    filename = f'FO-SGSI-20_{m.ticket_folio}_{date.today().strftime("%Y%m%d")}.pdf'
+    return send_file(buf, as_attachment=True, download_name=filename,
+                     mimetype='application/pdf')
+
+
+@app.route('/maintenance/<int:id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def maintenance_delete(id):
+    m = Maintenance.query.get_or_404(id)
+    name = m.ticket_folio
+    # Restore asset status
+    if m.asset.status == 'maintenance':
+        m.asset.status = m.prev_asset_status or 'available'
+    db.session.delete(m)
+    log_action('delete', 'maintenance', entity_id=id, entity_name=name)
+    db.session.commit()
+    flash(f'Ticket "{name}" eliminado.', 'warning')
+    return redirect(url_for('maintenance_list'))
+
+
+# ── Licenses ──────────────────────────────────────────────────────────────────
+
+_LIC_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), 'instance', 'uploads', 'licenses')
+os.makedirs(_LIC_UPLOAD_DIR, exist_ok=True)
+
+
+@app.route('/licenses')
+@login_required
+def license_list():
+    q        = request.args.get('q', '').strip()
+    fstatus  = request.args.get('status', '')
+    fvendor  = request.args.get('vendor', '')
+    fcateg   = request.args.get('category', '')
+
+    query = License.query
+    if q:
+        like = f'%{q}%'
+        query = query.filter(
+            db.or_(License.name.ilike(like), License.vendor.ilike(like),
+                   License.software.ilike(like), License.tenant_name.ilike(like))
+        )
+    if fvendor:
+        query = query.filter(License.vendor.ilike(f'%{fvendor}%'))
+    if fcateg:
+        query = query.filter(License.category == fcateg)
+
+    all_lics = query.order_by(License.vendor, License.name).all()
+
+    # Filter by effective_status after load (computed property)
+    if fstatus:
+        all_lics = [l for l in all_lics if l.effective_status == fstatus]
+
+    # Stats
+    today = date.today()
+    soon  = today + timedelta(days=30)
+    total      = License.query.count()
+    active_c   = sum(1 for l in License.query.all() if l.effective_status == 'active')
+    expiring_c = sum(1 for l in License.query.all() if l.effective_status == 'expiring')
+    expired_c  = sum(1 for l in License.query.all() if l.effective_status == 'expired')
+
+    vendors    = db.session.query(License.vendor).filter(License.vendor != None).distinct().order_by(License.vendor).all()
+    vendors    = [v[0] for v in vendors if v[0]]
+
+    return render_template('licenses/list.html',
+                           licenses=all_lics,
+                           q=q, fstatus=fstatus, fvendor=fvendor, fcateg=fcateg,
+                           total=total, active_c=active_c,
+                           expiring_c=expiring_c, expired_c=expired_c,
+                           vendors=vendors,
+                           category_choices=License.CATEGORY_CHOICES)
+
+
+@app.route('/licenses/new', methods=['GET', 'POST'])
+@login_required
+def license_new():
+    if request.method == 'POST':
+        lic = License(
+            name          = request.form.get('name', '').strip(),
+            vendor        = request.form.get('vendor', '').strip() or None,
+            software      = request.form.get('software', '').strip() or None,
+            category      = request.form.get('category') or None,
+            license_type  = request.form.get('license_type', 'subscription'),
+            license_key   = request.form.get('license_key', '').strip() or None,
+            is_microsoft  = bool(request.form.get('is_microsoft')),
+            tenant_id     = request.form.get('tenant_id', '').strip() or None,
+            tenant_name   = request.form.get('tenant_name', '').strip() or None,
+            tenant_domain = request.form.get('tenant_domain', '').strip() or None,
+            subscription_id = request.form.get('subscription_id', '').strip() or None,
+            sku_name      = request.form.get('sku_name', '').strip() or None,
+            seat_count    = int(request.form['seat_count']) if request.form.get('seat_count') else None,
+            purchase_cost = float(request.form['purchase_cost']) if request.form.get('purchase_cost') else None,
+            renewal_cost  = float(request.form['renewal_cost']) if request.form.get('renewal_cost') else None,
+            currency      = request.form.get('currency', 'MXN'),
+            purchase_date = _parse_date(request.form.get('purchase_date')),
+            expiry_date   = _parse_date(request.form.get('expiry_date')),
+            renewal_date  = _parse_date(request.form.get('renewal_date')),
+            status        = request.form.get('status', 'active'),
+            notes         = request.form.get('notes', '').strip() or None,
+        )
+        if not lic.name:
+            flash('El nombre es requerido.', 'danger')
+            return render_template('licenses/form.html', record=None,
+                                   category_choices=License.CATEGORY_CHOICES,
+                                   type_choices=License.TYPE_CHOICES,
+                                   currency_choices=License.CURRENCY_CHOICES,
+                                   form=request.form)
+        db.session.add(lic)
+        log_action('create', 'license', entity_name=lic.name,
+                   details=f'Licencia creada: {lic.vendor} {lic.name}')
+        db.session.commit()
+        flash(f'Licencia "{lic.name}" creada.', 'success')
+        return redirect(url_for('license_detail', id=lic.id))
+
+    return render_template('licenses/form.html', record=None,
+                           category_choices=License.CATEGORY_CHOICES,
+                           type_choices=License.TYPE_CHOICES,
+                           currency_choices=License.CURRENCY_CHOICES,
+                           form={})
+
+
+@app.route('/licenses/<int:id>')
+@login_required
+def license_detail(id):
+    lic       = License.query.get_or_404(id)
+    employees = Employee.query.filter_by(active=True).order_by(Employee.name).all()
+    assets    = Asset.query.filter(Asset.status.notin_(['retired', 'disposed'])).order_by(Asset.name).all()
+    return render_template('licenses/detail.html', record=lic,
+                           employees=employees, assets=assets,
+                           category_choices=License.CATEGORY_CHOICES,
+                           type_choices=License.TYPE_CHOICES)
+
+
+@app.route('/licenses/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def license_edit(id):
+    lic = License.query.get_or_404(id)
+    if request.method == 'POST':
+        lic.name          = request.form.get('name', '').strip()
+        lic.vendor        = request.form.get('vendor', '').strip() or None
+        lic.software      = request.form.get('software', '').strip() or None
+        lic.category      = request.form.get('category') or None
+        lic.license_type  = request.form.get('license_type', 'subscription')
+        lic.license_key   = request.form.get('license_key', '').strip() or None
+        lic.is_microsoft  = bool(request.form.get('is_microsoft'))
+        lic.tenant_id     = request.form.get('tenant_id', '').strip() or None
+        lic.tenant_name   = request.form.get('tenant_name', '').strip() or None
+        lic.tenant_domain = request.form.get('tenant_domain', '').strip() or None
+        lic.subscription_id = request.form.get('subscription_id', '').strip() or None
+        lic.sku_name      = request.form.get('sku_name', '').strip() or None
+        lic.seat_count    = int(request.form['seat_count']) if request.form.get('seat_count') else None
+        lic.purchase_cost = float(request.form['purchase_cost']) if request.form.get('purchase_cost') else None
+        lic.renewal_cost  = float(request.form['renewal_cost']) if request.form.get('renewal_cost') else None
+        lic.currency      = request.form.get('currency', 'MXN')
+        lic.purchase_date = _parse_date(request.form.get('purchase_date'))
+        lic.expiry_date   = _parse_date(request.form.get('expiry_date'))
+        lic.renewal_date  = _parse_date(request.form.get('renewal_date'))
+        lic.status        = request.form.get('status', 'active')
+        lic.notes         = request.form.get('notes', '').strip() or None
+        lic.updated_at    = datetime.utcnow()
+        log_action('update', 'license', entity_id=lic.id, entity_name=lic.name)
+        db.session.commit()
+        flash('Licencia actualizada.', 'success')
+        return redirect(url_for('license_detail', id=lic.id))
+
+    return render_template('licenses/form.html', record=lic,
+                           category_choices=License.CATEGORY_CHOICES,
+                           type_choices=License.TYPE_CHOICES,
+                           currency_choices=License.CURRENCY_CHOICES,
+                           form={})
+
+
+@app.route('/licenses/<int:id>/assign', methods=['POST'])
+@login_required
+def license_assign(id):
+    lic  = License.query.get_or_404(id)
+    # Check seat availability
+    if lic.seat_count is not None and lic.used_seats >= lic.seat_count:
+        flash('No hay asientos disponibles en esta licencia.', 'danger')
+        return redirect(url_for('license_detail', id=id))
+
+    emp_id   = request.form.get('employee_id') or None
+    asset_id = request.form.get('asset_id')    or None
+    if not emp_id and not asset_id:
+        flash('Selecciona un empleado o un activo para asignar.', 'warning')
+        return redirect(url_for('license_detail', id=id))
+
+    asn = LicenseAssignment(
+        license_id    = lic.id,
+        employee_id   = int(emp_id)   if emp_id   else None,
+        asset_id      = int(asset_id) if asset_id else None,
+        assigned_date = _parse_date(request.form.get('assigned_date')) or date.today(),
+        notes         = request.form.get('notes', '').strip() or None,
+    )
+    db.session.add(asn)
+    target = Employee.query.get(emp_id).name if emp_id else Asset.query.get(asset_id).name
+    log_action('create', 'license_assignment', entity_id=lic.id, entity_name=lic.name,
+               details=f'Asignada a: {target}')
+    db.session.commit()
+    flash(f'Licencia asignada a {target}.', 'success')
+    return redirect(url_for('license_detail', id=id))
+
+
+@app.route('/licenses/<int:id>/unassign/<int:aid>', methods=['POST'])
+@login_required
+def license_unassign(id, aid):
+    asn = LicenseAssignment.query.get_or_404(aid)
+    lic = License.query.get_or_404(id)
+    target = asn.employee.name if asn.employee else (asn.asset.name if asn.asset else '?')
+    db.session.delete(asn)
+    log_action('delete', 'license_assignment', entity_id=lic.id, entity_name=lic.name,
+               details=f'Remoción de asignación: {target}')
+    db.session.commit()
+    flash(f'Asignación de {target} removida.', 'info')
+    return redirect(url_for('license_detail', id=id))
+
+
+@app.route('/licenses/<int:id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def license_delete(id):
+    lic  = License.query.get_or_404(id)
+    name = lic.name
+    db.session.delete(lic)
+    log_action('delete', 'license', entity_id=id, entity_name=name)
+    db.session.commit()
+    flash(f'Licencia "{name}" eliminada.', 'warning')
+    return redirect(url_for('license_list'))
 
 
 # ── Categories ────────────────────────────────────────────────────────────────
@@ -993,7 +1804,17 @@ def shipment_track(id):
     if not trk._API_KEY:
         return jsonify({'ok': False, 'error': 'AFTERSHIP_API_KEY no configurado en .env'}), 503
 
-    ok = trk.refresh_shipment(shipment)
+    try:
+        ok = trk.refresh_shipment(shipment)
+    except trk.AfterShipRateLimitError as e:
+        return jsonify({
+            'ok': False,
+            'error': 'Límite diario de AfterShip alcanzado (plan gratuito: 100 req/día). Intenta de nuevo mañana o actualiza el plan en aftership.com.',
+            'code': 429,
+        }), 429
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'Error inesperado: {e}'}), 502
+
     if ok:
         db.session.commit()
         import json as _json
@@ -1009,7 +1830,7 @@ def shipment_track(id):
             'tag':      shipment.tracking_tag,
             'eta':      shipment.est_delivery_afship.isoformat() if shipment.est_delivery_afship else None,
             'updated':  shipment.last_tracking_at.strftime('%d/%m/%Y %H:%M') if shipment.last_tracking_at else None,
-            'events':   events[-10:],   # últimos 10 para el timeline
+            'events':   events[-10:],
         })
     return jsonify({'ok': False, 'error': 'No se pudo obtener información del carrier'}), 502
 
@@ -1706,7 +2527,9 @@ def global_search():
     if len(q) < 2:
         return jsonify({'assets': [], 'employees': [], 'projects': []})
 
-    like = f'%{q}%'
+    nq   = _nrm(q)
+    like = f'%{nq}%'
+    nrm  = db.func.nrm
     results = {'assets': [], 'employees': [], 'projects': []}
 
     # Assets
@@ -1719,9 +2542,9 @@ def global_search():
         dept_filter = db_user.department_id
 
     aq = Asset.query.filter(db.or_(
-        Asset.name.ilike(like), Asset.asset_tag.ilike(like),
-        Asset.serial_number.ilike(like), Asset.manufacturer.ilike(like),
-        Asset.model.ilike(like),
+        nrm(Asset.name).like(like),        nrm(Asset.asset_tag).like(like),
+        nrm(Asset.serial_number).like(like), nrm(Asset.manufacturer).like(like),
+        nrm(Asset.model).like(like),
     ))
     if dept_filter:
         aq = aq.filter_by(department_id=dept_filter)
@@ -1734,8 +2557,8 @@ def global_search():
 
     # Employees
     for e in Employee.query.filter(db.or_(
-        Employee.name.ilike(like), Employee.employee_id.ilike(like),
-        Employee.email.ilike(like), Employee.department.ilike(like),
+        nrm(Employee.name).like(like),        nrm(Employee.employee_id).like(like),
+        nrm(Employee.email).like(like),       nrm(Employee.department).like(like),
     )).limit(5).all():
         results['employees'].append({
             'title': e.name,
@@ -1747,7 +2570,7 @@ def global_search():
     from models import Project
     if is_admin or 'projects' in sess_user.get('modules', []):
         for p in Project.query.filter(db.or_(
-            Project.name.ilike(like), Project.code.ilike(like),
+            nrm(Project.name).like(like), nrm(Project.code).like(like),
         )).limit(5).all():
             results['projects'].append({
                 'title': p.name,
@@ -1834,6 +2657,19 @@ def inject_globals():
         except Exception:
             pass
 
+    # License expiry alerts (expiring or expired, non-cancelled)
+    license_alerts = 0
+    if u and (u.get('role') == 'admin' or 'inventory' in u.get('modules', [])):
+        try:
+            soon = date.today() + timedelta(days=30)
+            license_alerts = License.query.filter(
+                License.status != 'cancelled',
+                License.expiry_date != None,       # noqa: E711
+                License.expiry_date <= soon,
+            ).count()
+        except Exception:
+            pass
+
     return {
         'today': date.today(),
         'current_user': u,
@@ -1846,6 +2682,7 @@ def inject_globals():
         'other_lang': other_lang,
         'pending_requests_count': pending_requests_count,
         'warranty_alerts': warranty_alerts,
+        'license_alerts': license_alerts,
         'STATUS_BADGES': {
             'available':   'success',
             'in_use':      'primary',
@@ -1981,6 +2818,170 @@ def supplier_delete(id):
     db.session.commit()
     flash(f'Proveedor "{name}" eliminado.', 'success')
     return redirect(url_for('suppliers_list'))
+
+
+# ── Absolute Integration ──────────────────────────────────────────────────────
+
+def _get_absolute_client():
+    """Devuelve un AbsoluteClient configurado o None si no hay credenciales."""
+    from absolute import AbsoluteClient, AbsoluteAuthError
+    tid    = AppSetting.get('absolute_token_id', '')
+    tsecret= AppSetting.get('absolute_token_secret', '')
+    if not tid or not tsecret:
+        return None
+    return AbsoluteClient(tid, tsecret)
+
+
+@app.route('/setup/absolute', methods=['GET', 'POST'])
+@admin_required
+def setup_absolute():
+    """Configuración de credenciales de Absolute."""
+    from absolute import AbsoluteClient, AbsoluteError
+    test_result = None
+
+    if request.method == 'POST':
+        action = request.form.get('action', 'save')
+        tid    = request.form.get('token_id', '').strip()
+        tsec   = request.form.get('token_secret', '').strip()
+
+        if action == 'test':
+            if not tid or not tsec:
+                test_result = {'ok': False, 'message': 'Ingresa el Token ID y Token Secret antes de probar.'}
+            else:
+                try:
+                    result = AbsoluteClient(tid, tsec).test_connection()
+                    test_result = result
+                except AbsoluteError as e:
+                    test_result = {'ok': False, 'message': str(e)}
+        else:
+            AppSetting.set('absolute_token_id',     tid)
+            AppSetting.set('absolute_token_secret', tsec)
+            db.session.commit()
+            flash('Credenciales de Absolute guardadas.', 'success')
+            return redirect(url_for('setup_absolute'))
+
+    configured = bool(AppSetting.get('absolute_token_id'))
+    return render_template('setup/absolute.html',
+                           token_id=AppSetting.get('absolute_token_id', ''),
+                           token_secret=AppSetting.get('absolute_token_secret', ''),
+                           configured=configured,
+                           test_result=test_result)
+
+
+@app.route('/assets/<int:id>/absolute/search-serial', methods=['POST'])
+@login_required
+def asset_absolute_search(id):
+    """Busca el activo en Absolute por su número de serie y devuelve candidatos."""
+    from absolute import AbsoluteError, parse_device
+    asset = Asset.query.get_or_404(id)
+    client = _get_absolute_client()
+    if not client:
+        return jsonify({'error': 'Absolute no está configurado. Ve a Setup → Absolute.'}), 400
+
+    serial = asset.serial_number or ''
+    name   = request.form.get('search_name', asset.name or '')
+
+    results = []
+    try:
+        if serial:
+            raw = client.search_by_serial(serial)
+            results = [parse_device(d) for d in raw]
+        if not results and name:
+            raw = client.search_by_name(name)
+            results = [parse_device(d) for d in raw]
+    except AbsoluteError as e:
+        return jsonify({'error': str(e)}), 400
+
+    # Serializar datetimes para JSON
+    for r in results:
+        if r.get('last_seen'):
+            r['last_seen'] = r['last_seen'].strftime('%d/%m/%Y %H:%M')
+        r.pop('raw', None)
+
+    return jsonify({'results': results})
+
+
+@app.route('/assets/<int:id>/absolute/link', methods=['POST'])
+@login_required
+def asset_absolute_link(id):
+    """Liga el activo a un Device UID de Absolute y hace el primer sync."""
+    from absolute import AbsoluteError, parse_device
+    asset = Asset.query.get_or_404(id)
+    client = _get_absolute_client()
+    if not client:
+        flash('Absolute no está configurado. Ve a Setup → Absolute.', 'danger')
+        return redirect(url_for('asset_detail', id=id))
+
+    device_id = request.form.get('device_id', '').strip()
+    if not device_id:
+        flash('Selecciona un dispositivo antes de ligar.', 'warning')
+        return redirect(url_for('asset_detail', id=id))
+
+    try:
+        raw = client.get_device(device_id)
+        dev = parse_device(raw)
+    except AbsoluteError as e:
+        flash(f'Error al obtener el dispositivo: {e}', 'danger')
+        return redirect(url_for('asset_detail', id=id))
+
+    asset.absolute_id        = dev['id'] or device_id
+    asset.absolute_status    = dev['status']
+    asset.absolute_username  = dev['username']
+    asset.absolute_last_seen = dev['last_seen']
+    asset.absolute_sync_at   = datetime.utcnow()
+    log_action('update', 'asset', entity_id=asset.id, entity_name=asset.name,
+               details=f'Ligado a Absolute Device: {device_id}')
+    db.session.commit()
+    flash(f'Activo ligado a Absolute: {dev["name"] or device_id}', 'success')
+    return redirect(url_for('asset_detail', id=id))
+
+
+@app.route('/assets/<int:id>/absolute/sync', methods=['POST'])
+@login_required
+def asset_absolute_sync(id):
+    """Sincroniza datos del activo desde Absolute."""
+    from absolute import AbsoluteError, parse_device
+    asset = Asset.query.get_or_404(id)
+    if not asset.absolute_id:
+        flash('Este activo no está ligado a Absolute.', 'warning')
+        return redirect(url_for('asset_detail', id=id))
+
+    client = _get_absolute_client()
+    if not client:
+        flash('Absolute no está configurado.', 'danger')
+        return redirect(url_for('asset_detail', id=id))
+
+    try:
+        raw = client.get_device(asset.absolute_id)
+        dev = parse_device(raw)
+    except AbsoluteError as e:
+        flash(f'Error al sincronizar con Absolute: {e}', 'danger')
+        return redirect(url_for('asset_detail', id=id))
+
+    asset.absolute_status    = dev['status']
+    asset.absolute_username  = dev['username']
+    asset.absolute_last_seen = dev['last_seen']
+    asset.absolute_sync_at   = datetime.utcnow()
+    db.session.commit()
+    flash('Datos de Absolute actualizados.', 'success')
+    return redirect(url_for('asset_detail', id=id))
+
+
+@app.route('/assets/<int:id>/absolute/unlink', methods=['POST'])
+@login_required
+def asset_absolute_unlink(id):
+    """Desliga el activo de Absolute (solo borra el vínculo local)."""
+    asset = Asset.query.get_or_404(id)
+    asset.absolute_id        = None
+    asset.absolute_status    = None
+    asset.absolute_username  = None
+    asset.absolute_last_seen = None
+    asset.absolute_sync_at   = None
+    log_action('update', 'asset', entity_id=asset.id, entity_name=asset.name,
+               details='Desvinculado de Absolute')
+    db.session.commit()
+    flash('Vínculo con Absolute eliminado.', 'info')
+    return redirect(url_for('asset_detail', id=id))
 
 
 # ── Brands ────────────────────────────────────────────────────────────────────
@@ -2137,31 +3138,11 @@ def rate_limited(e):
     return render_template('errors/429.html'), 429
 
 
-# ── Auto-tracking scheduler (cada 4 horas) ────────────────────────────────────
-def _start_tracking_scheduler():
-    """Lanza un hilo en background que refresca envíos activos cada 4 horas."""
-    import threading, time, tracking as trk
-
-    def _loop():
-        # Primera corrida 60 s después de arrancar (da tiempo al DB de inicializarse)
-        time.sleep(60)
-        while True:
-            try:
-                if trk._API_KEY:
-                    n = trk.refresh_all_active(app)
-                    if n:
-                        app.logger.info("Tracking scheduler: %d envíos actualizados", n)
-            except Exception as e:
-                app.logger.exception("Tracking scheduler error: %s", e)
-            time.sleep(4 * 3600)   # cada 4 horas
-
-    t = threading.Thread(target=_loop, daemon=True, name="tracking-scheduler")
-    t.start()
-
-
-# Arrancar scheduler solo si no estamos en modo debug-reloader (evita doble instancia)
-if not os.environ.get('WERKZEUG_RUN_MAIN'):
-    _start_tracking_scheduler()
+# ── Auto-tracking scheduler desactivado ───────────────────────────────────────
+# El plan gratuito de AfterShip permite 100 requests/día.
+# Con pocos envíos es más eficiente rastrear manualmente con el botón
+# "Rastrear ahora" en cada envío → 1 request por acción del usuario.
+# Si en el futuro se tienen muchos envíos activos, reactivar el scheduler.
 
 if __name__ == '__main__':
     app.run(debug=os.environ.get('FLASK_DEBUG', '0') == '1', port=5050, host='0.0.0.0')

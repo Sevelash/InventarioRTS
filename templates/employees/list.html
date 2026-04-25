@@ -86,6 +86,18 @@
               {% endif %}
             </td>
             <td class="text-end pe-3">
+              {% if emp.current_assets|length > 0 %}
+              <a href="{{ url_for('employee_responsiva', id=emp.id) }}"
+                 class="btn btn-sm btn-outline-primary py-0 px-2" title="Carta de Resguardo">
+                <i class="bi bi-file-earmark-word"></i>
+              </a>
+              {% endif %}
+              {% if emp.active %}
+              <a href="{{ url_for('employee_offboarding', id=emp.id) }}"
+                 class="btn btn-sm btn-outline-danger py-0 px-2" title="Offboarding">
+                <i class="bi bi-box-arrow-right"></i>
+              </a>
+              {% endif %}
               <a href="{{ url_for('employee_edit', id=emp.id) }}" class="btn btn-sm btn-outline-secondary py-0 px-2">
                 <i class="bi bi-pencil"></i>
               </a>

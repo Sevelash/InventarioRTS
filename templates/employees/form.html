@@ -4,6 +4,12 @@
 {% block page_title %}{{ 'Editar Empleado' if employee else 'Nuevo Empleado' }}{% endblock %}
 
 {% block topbar_actions %}
+  {% if employee %}
+  <a href="{{ url_for('employee_offboarding', id=employee.id) }}"
+     class="btn btn-sm btn-danger">
+    <i class="bi bi-box-arrow-right me-1"></i>Offboarding
+  </a>
+  {% endif %}
   <a href="{{ url_for('employees_list') }}" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-arrow-left me-1"></i>Cancelar
   </a>

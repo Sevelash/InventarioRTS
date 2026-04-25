@@ -156,5 +156,28 @@
     </div>
   </div>
 
+  <!-- Absolute -->
+  <div class="col-12 col-lg-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div style="width:52px;height:52px;border-radius:12px;background:#e85c2b;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="bi bi-shield-lock" style="font-size:22px;color:#fff;"></i>
+        </div>
+        <div>
+          <div class="text-muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;">Absolute</div>
+          <div style="font-size:13px;color:var(--rts-gray);">
+            Rastreo y protección de endpoints — laptops y desktops.
+          </div>
+        </div>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0">
+        <a href="{{ url_for('setup_absolute') }}" class="btn btn-sm w-100"
+           style="background:#e85c2b;color:#fff;border-color:#e85c2b;">
+          <i class="bi bi-shield-lock me-1"></i>Configurar Absolute
+        </a>
+      </div>
+    </div>
+  </div>
+
 </div>
 {% endblock %}

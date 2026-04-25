@@ -74,6 +74,10 @@
             </td>
             <td class="text-end pe-3">
               {% if not a.returned_date %}
+              <a href="{{ url_for('employee_responsiva', id=a.employee.id) }}"
+                 class="btn btn-sm btn-outline-primary py-0 px-2 me-1" title="Carta de Resguardo">
+                <i class="bi bi-file-earmark-word"></i>
+              </a>
               <form action="{{ url_for('assignment_return', id=a.id) }}" method="post" class="d-inline"
                     onsubmit="return confirm('¿Registrar devolución de {{ a.asset.name }}?')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

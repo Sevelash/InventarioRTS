@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}Carta de Resguardo — {{ employee.name }}{% endblock %}
+{% block page_title %}Carta de Resguardo{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('employees_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([
+  ('Empleados', url_for('employees_list')),
+  (employee.name, none),
+  ('Carta de Resguardo', none)
+]) }}
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+
+    <!-- Employee card -->
+    <div class="card mb-3">
+      <div class="card-body d-flex align-items-center gap-3 py-3">
+        <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0"
+             style="width:52px;height:52px;font-size:1.3rem;">
+          {{ employee.name[0].upper() }}
+        </div>
+        <div>
+          <div class="fw-semibold fs-5">{{ employee.name }}</div>
+          <div class="text-muted" style="font-size:13px;">
+            <span class="me-3"><i class="bi bi-person-badge me-1"></i>{{ employee.employee_id }}</span>
+            {% if employee.department %}
+            <span class="me-3"><i class="bi bi-diagram-3 me-1"></i>{{ employee.department }}</span>
+            {% endif %}
+            {% if employee.email %}
+            <span><i class="bi bi-envelope me-1"></i>{{ employee.email }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <span class="badge {% if employee.active %}bg-success{% else %}bg-secondary{% endif %} ms-auto">
+          {% if employee.active %}Activo{% else %}Inactivo{% endif %}
+        </span>
+      </div>
+    </div>
+
+    {% if assets %}
+    <form method="post" action="{{ url_for('employee_responsiva_download', id=employee.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <!-- Asset selection -->
+      <div class="card mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-laptop me-2"></i>Activos asignados actualmente</span>
+          <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" id="selectAll" checked>
+            <label class="form-check-label fw-semibold" for="selectAll" style="font-size:13px;">
+              Seleccionar todos
+            </label>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0" style="font-size:13.5px;">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3" style="width:40px;"></th>
+                  <th>Activo</th>
+                  <th>Tipo</th>
+                  <th>Marca / Modelo</th>
+                  <th>No. Serie</th>
+                  <th class="text-end pe-3">Costo Unitario</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for asset in assets %}
+                <tr>
+                  <td class="ps-3">
+                    <input class="form-check-input asset-check" type="checkbox"
+                           name="asset_ids" value="{{ asset.id }}" checked>
+                  </td>
+                  <td>
+                    <div class="fw-semibold">{{ asset.name }}</div>
+                    {% if asset.asset_tag %}
+                    <small class="text-muted asset-tag-badge" style="font-size:11px;">{{ asset.asset_tag }}</small>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% set type_labels = {
+                      'laptop': 'Laptop', 'desktop': 'Desktop / PC',
+                      'monitor': 'Monitor', 'tablet': 'Tablet',
+                      'headset': 'Headset', 'teclado': 'Teclado',
+                      'mouse': 'Mouse', 'impresora': 'Impresora',
+                      'camara': 'Cámara', 'otro': 'Otro'
+                    } %}
+                    {{ type_labels.get(asset.asset_type, asset.asset_type or '—') }}
+                  </td>
+                  <td>
+                    {% if asset.brand %}{{ asset.brand.name }}{% endif %}
+                    {% if asset.model %}<span class="text-muted">/ {{ asset.model }}</span>{% endif %}
+                    {% if not asset.brand and not asset.model %}—{% endif %}
+                  </td>
+                  <td class="font-monospace" style="font-size:12px;">
+                    {{ asset.serial_number or '—' }}
+                  </td>
+                  <td class="text-end pe-3">
+                    {% if asset.purchase_cost %}
+                      <span class="fw-semibold">${{ '{:,.2f}'.format(asset.purchase_cost) }} MXN</span>
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot class="table-light">
+                <tr>
+                  <td colspan="5" class="text-end fw-semibold ps-3 pe-3">
+                    Total del Setup:
+                  </td>
+                  <td class="text-end pe-3 fw-bold" id="total-cost">
+                    {% set total = assets | selectattr('purchase_cost') | map(attribute='purchase_cost') | sum %}
+                    ${{ '{:,.2f}'.format(total) }} MXN
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Info box -->
+      <div class="alert alert-info d-flex gap-2 py-2 mb-3" style="font-size:13px;">
+        <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+        <div>
+          El documento generado incluirá <strong>solo los activos seleccionados</strong>.
+          La fecha del documento corresponde a la fecha de asignación más antigua entre los seleccionados.
+          Se generará un archivo <strong>.pdf</strong> no editable, listo para imprimir y firmar.
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="d-flex gap-2 justify-content-end mb-4">
+        <a href="{{ url_for('employees_list') }}" class="btn btn-outline-secondary">
+          Cancelar
+        </a>
+        <button type="submit" id="btn-generate"
+                style="background-color:#e8453c; border-color:#e8453c; color:#fff;"
+                class="btn">
+          <i class="bi bi-file-earmark-pdf-fill me-1"></i>Generar Carta de Resguardo
+        </button>
+      </div>
+    </form>
+
+    {% else %}
+    <!-- No assets assigned -->
+    <div class="card">
+      <div class="card-body text-center py-5">
+        <i class="bi bi-inbox text-muted d-block mb-2" style="font-size:2.5rem;"></i>
+        <div class="fw-semibold text-muted mb-1">Sin activos asignados</div>
+        <div class="text-muted mb-3" style="font-size:13px;">
+          Este empleado no tiene equipos asignados actualmente.
+        </div>
+        <a href="{{ url_for('assignment_new') }}" class="btn btn-rts btn-sm">
+          <i class="bi bi-plus-circle me-1"></i>Asignar activo
+        </a>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Select All toggle
+const selectAll = document.getElementById('selectAll');
+const assetChecks = document.querySelectorAll('.asset-check');
+const btnGenerate = document.getElementById('btn-generate');
+
+if (selectAll) {
+  selectAll.addEventListener('change', () => {
+    assetChecks.forEach(cb => cb.checked = selectAll.checked);
+    updateTotal();
+  });
+}
+
+assetChecks.forEach(cb => {
+  cb.addEventListener('change', () => {
+    selectAll.checked = [...assetChecks].every(c => c.checked);
+    updateTotal();
+    // Disable submit if none selected
+    const anyChecked = [...assetChecks].some(c => c.checked);
+    if (btnGenerate) btnGenerate.disabled = !anyChecked;
+  });
+});
+
+// Cost data per asset for dynamic total
+const assetCosts = {
+  {% for asset in assets %}
+  {{ asset.id }}: {{ asset.purchase_cost or 0 }},
+  {% endfor %}
+};
+
+function updateTotal() {
+  let total = 0;
+  assetChecks.forEach(cb => {
+    if (cb.checked) total += assetCosts[parseInt(cb.value)] || 0;
+  });
+  const el = document.getElementById('total-cost');
+  if (el) {
+    el.textContent = total > 0
+      ? '$' + total.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' MXN'
+      : '—';
+  }
+}
+</script>
+{% endblock %}

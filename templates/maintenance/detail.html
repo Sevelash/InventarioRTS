@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}{{ record.ticket_folio }} — Mantenimiento{% endblock %}
+{% block page_title %}Ticket de Mantenimiento{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('maintenance_pdf', id=record.id) }}"
+     class="btn btn-sm" style="background:#e8453c;color:#fff;border-color:#e8453c;">
+    <i class="bi bi-file-earmark-pdf-fill me-1"></i>FO-SGSI-20 PDF
+  </a>
+  <a href="{{ url_for('maintenance_edit', id=record.id) }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-pencil me-1"></i>Editar
+  </a>
+  <a href="{{ url_for('maintenance_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([
+  ('Inventory', url_for('inventory_dashboard')),
+  ('Mantenimiento', url_for('maintenance_list')),
+  (record.ticket_folio, none)
+]) }}
+
+<div class="row g-3">
+  {# ── Col principal ── #}
+  <div class="col-lg-8">
+
+    {# Header card #}
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex align-items-start justify-content-between gap-3">
+          <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="fw-bold fs-5">{{ record.ticket_folio }}</span>
+              <span class="badge bg-{{ record.type_color }}">{{ record.type_label }}</span>
+              <span class="badge bg-{{ record.status_color }}">{{ record.status_label }}</span>
+            </div>
+            <div class="text-muted" style="font-size:13px;">
+              <i class="bi bi-laptop me-1"></i>
+              <a href="{{ url_for('asset_detail', id=record.asset_id) }}" class="text-decoration-none">
+                {{ record.asset.name }}
+              </a>
+              <span class="ms-2 asset-tag-badge">{{ record.asset.asset_tag }}</span>
+              {% if record.asset.serial_number %}
+              <span class="ms-2 text-muted">S/N: {{ record.asset.serial_number }}</span>
+              {% endif %}
+            </div>
+            {% if record.reported_by %}
+            <div class="text-muted mt-1" style="font-size:12px;">
+              <i class="bi bi-person me-1"></i>{{ record.reported_by }}
+              {% if record.reported_date %}
+              · <i class="bi bi-calendar3 me-1"></i>{{ record.reported_date | format_date }}
+              {% endif %}
+            </div>
+            {% endif %}
+          </div>
+
+          {# Cambio de estado #}
+          <div class="flex-shrink-0">
+            {% if record.status != 'cerrado' %}
+            <form action="{{ url_for('maintenance_status', id=record.id) }}" method="post" class="d-flex gap-2 align-items-center">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <select name="status" class="form-select form-select-sm" style="width:140px;">
+                {% for val, lbl in [('pendiente','Pendiente'),('en_proceso','En Proceso'),('completado','Completado'),('cerrado','Cerrado')] %}
+                <option value="{{ val }}" {% if record.status == val %}selected{% endif %}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn btn-sm btn-primary">Cambiar</button>
+            </form>
+            {% else %}
+            <span class="badge bg-secondary fs-6">Cerrado {{ record.actual_close_date | format_date if record.actual_close_date else '' }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Descripción #}
+    {% if record.description %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-card-text me-2"></i>Descripción del Problema</div>
+      <div class="card-body">
+        <p class="mb-0" style="white-space:pre-wrap;">{{ record.description }}</p>
+        {% if record.nc_source %}
+        <hr class="my-2">
+        <small class="text-muted">
+          <strong>Fuente:</strong>
+          {% for val, lbl in nc_sources %}{% if val == record.nc_source %}{{ lbl }}{% endif %}{% endfor %}
+        </small>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# Análisis causa raíz #}
+    {% if record.root_cause or record.root_cause_analysis or record.correction_desc %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-search me-2"></i>Análisis de Causa Raíz</div>
+      <div class="card-body">
+        {% if record.analysis_method or record.participants %}
+        <div class="row g-2 mb-3">
+          {% if record.analysis_method %}
+          <div class="col-md-6">
+            <div class="fw-semibold" style="font-size:12px;color:#888;">MÉTODO</div>
+            <div>{{ record.analysis_method }}</div>
+          </div>
+          {% endif %}
+          {% if record.participants %}
+          <div class="col-md-6">
+            <div class="fw-semibold" style="font-size:12px;color:#888;">PARTICIPANTES</div>
+            <div>{{ record.participants }}</div>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% if record.root_cause_analysis %}
+        <div class="mb-3">
+          <div class="fw-semibold" style="font-size:12px;color:#888;">DESARROLLO DEL ANÁLISIS</div>
+          <div style="white-space:pre-wrap;">{{ record.root_cause_analysis }}</div>
+        </div>
+        {% endif %}
+        {% if record.root_cause %}
+        <div class="alert alert-warning py-2 mb-2">
+          <strong>Causa raíz identificada:</strong> {{ record.root_cause }}
+        </div>
+        {% endif %}
+        {% if record.correction_desc %}
+        <div class="mb-0">
+          <div class="fw-semibold" style="font-size:12px;color:#888;">CORRECCIÓN</div>
+          <div style="white-space:pre-wrap;">{{ record.correction_desc }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# Plan de acción #}
+    {% if record.action_plan_list %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-list-check me-2"></i>Plan de Acción</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0" style="font-size:13px;">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">#</th>
+              <th>Tarea</th>
+              <th>Responsable</th>
+              <th>Fecha Límite</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in record.action_plan_list %}
+            <tr>
+              <td class="ps-3 text-muted">{{ loop.index }}</td>
+              <td>{{ row.task }}</td>
+              <td>{{ row.responsible or '—' }}</td>
+              <td>{{ row.deadline or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% if record.proposed_close_date %}
+        <div class="px-3 py-2 text-muted" style="font-size:12px;">
+          <i class="bi bi-calendar-check me-1"></i>
+          Fecha de cierre propuesta: <strong>{{ record.proposed_close_date | format_date }}</strong>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# Seguimiento y eficacia #}
+    {% if record.followup_responsible or record.effectiveness_ok is not none %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-clipboard2-check me-2"></i>Seguimiento y Eficacia</div>
+      <div class="card-body">
+        <div class="row g-3">
+          {% if record.followup_responsible %}
+          <div class="col-md-6">
+            <div class="fw-semibold" style="font-size:12px;color:#888;">RESPONSABLE SEGUIMIENTO</div>
+            <div>{{ record.followup_responsible }}</div>
+          </div>
+          {% endif %}
+          {% if record.close_responsible %}
+          <div class="col-md-6">
+            <div class="fw-semibold" style="font-size:12px;color:#888;">RESPONSABLE CIERRE</div>
+            <div>{{ record.close_responsible }}</div>
+          </div>
+          {% endif %}
+          {% if record.effectiveness_ok is not none %}
+          <div class="col-12">
+            <div class="fw-semibold mb-1" style="font-size:12px;color:#888;">¿SE ELIMINÓ LA CAUSA RAÍZ?</div>
+            {% if record.effectiveness_ok %}
+            <span class="badge bg-success fs-6">✓ Sí — Efectivo</span>
+            {% else %}
+            <span class="badge bg-danger fs-6">✗ No — Se requiere revisión</span>
+            {% endif %}
+            {% if record.effectiveness_notes %}
+            <div class="mt-2 text-muted" style="font-size:13px;">{{ record.effectiveness_notes }}</div>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Notas #}
+    {% if record.notes %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-sticky me-2"></i>Notas Internas</div>
+      <div class="card-body"><p class="mb-0" style="white-space:pre-wrap;">{{ record.notes }}</p></div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# ── Col derecha ── #}
+  <div class="col-lg-4">
+
+    {# Proceso / Info adicional #}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-diagram-3 me-2"></i>Proceso</div>
+      <div class="card-body" style="font-size:13px;">
+        {% if record.process_name %}
+        <div class="mb-2"><strong>Proceso:</strong> {{ record.process_name }}</div>
+        {% endif %}
+        {% if record.process_responsible %}
+        <div class="mb-2"><strong>Responsable:</strong> {{ record.process_responsible }}</div>
+        {% endif %}
+        {% if record.actual_close_date %}
+        <div><strong>Cierre real:</strong> {{ record.actual_close_date | format_date }}</div>
+        {% endif %}
+        {% if not record.process_name and not record.process_responsible %}
+        <div class="text-muted">—</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Fotos ANTES #}
+    {% set fotos_antes = record.photos_list | selectattr('photo_type','eq','antes') | list %}
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-camera me-2"></i>Fotos ANTES ({{ fotos_antes|length }})</span>
+        <a href="{{ url_for('maintenance_edit', id=record.id) }}" class="btn btn-outline-secondary btn-sm py-0">
+          <i class="bi bi-plus"></i>
+        </a>
+      </div>
+      <div class="card-body {% if not fotos_antes %}py-2{% else %}p-2{% endif %}">
+        {% if fotos_antes %}
+        <div class="row g-1">
+          {% for p in fotos_antes %}
+          {% set idx = record.photos_list.index(p) %}
+          <div class="col-6 position-relative">
+            <a href="{{ url_for('maintenance_photo', id=record.id, idx=idx) }}" target="_blank">
+              <img src="{{ url_for('maintenance_photo', id=record.id, idx=idx) }}"
+                   class="img-fluid rounded" style="height:90px;width:100%;object-fit:cover;">
+            </a>
+            <form action="{{ url_for('maintenance_delete_photo', id=record.id, idx=idx) }}"
+                  method="post" class="position-absolute top-0 end-0 m-1"
+                  onsubmit="return confirm('¿Eliminar foto?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-danger btn-sm py-0 px-1" style="font-size:10px;">✕</button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-muted text-center py-2" style="font-size:12px;">Sin fotos antes</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Fotos DESPUÉS #}
+    {% set fotos_despues = record.photos_list | selectattr('photo_type','eq','despues') | list %}
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-camera-fill me-2"></i>Fotos DESPUÉS ({{ fotos_despues|length }})</span>
+        <a href="{{ url_for('maintenance_edit', id=record.id) }}" class="btn btn-outline-secondary btn-sm py-0">
+          <i class="bi bi-plus"></i>
+        </a>
+      </div>
+      <div class="card-body {% if not fotos_despues %}py-2{% else %}p-2{% endif %}">
+        {% if fotos_despues %}
+        <div class="row g-1">
+          {% for p in fotos_despues %}
+          {% set idx = record.photos_list.index(p) %}
+          <div class="col-6 position-relative">
+            <a href="{{ url_for('maintenance_photo', id=record.id, idx=idx) }}" target="_blank">
+              <img src="{{ url_for('maintenance_photo', id=record.id, idx=idx) }}"
+                   class="img-fluid rounded" style="height:90px;width:100%;object-fit:cover;">
+            </a>
+            <form action="{{ url_for('maintenance_delete_photo', id=record.id, idx=idx) }}"
+                  method="post" class="position-absolute top-0 end-0 m-1"
+                  onsubmit="return confirm('¿Eliminar foto?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-danger btn-sm py-0 px-1" style="font-size:10px;">✕</button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-muted text-center py-2" style="font-size:12px;">Sin fotos después</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Documento FO-SGSI-20 #}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-file-earmark-text me-2"></i>Formato FO-SGSI-20</div>
+      <div class="card-body">
+        <div class="d-flex flex-column gap-2 mb-3">
+          <a href="{{ url_for('maintenance_pdf', id=record.id) }}"
+             class="btn btn-sm" style="background:#e8453c;color:#fff;">
+            <i class="bi bi-file-earmark-pdf-fill me-1"></i>Descargar Pre-llenado
+          </a>
+        </div>
+        <hr class="my-2">
+        <div class="fw-semibold mb-2" style="font-size:12.5px;">Subir formato firmado:</div>
+        <form action="{{ url_for('maintenance_upload_doc', id=record.id) }}"
+              method="post" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="file" name="document" class="form-control form-control-sm mb-2"
+                 accept=".pdf,.jpg,.jpeg,.png">
+          <button type="submit" class="btn btn-outline-primary btn-sm w-100">
+            <i class="bi bi-upload me-1"></i>Subir
+          </button>
+        </form>
+        {% if record.document_path %}
+        <div class="mt-2 d-flex align-items-center gap-2">
+          <i class="bi bi-file-earmark-check text-success"></i>
+          <a href="{{ url_for('maintenance_download_doc', id=record.id) }}"
+             class="text-decoration-none" style="font-size:12px;">
+            {{ record.document_name or 'Ver documento' }}
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Eliminar (admin) #}
+    {% if current_user and current_user.role == 'admin' and record.status == 'cerrado' %}
+    <div class="card border-danger">
+      <div class="card-body py-2">
+        <form action="{{ url_for('maintenance_delete', id=record.id) }}" method="post"
+              onsubmit="return confirm('¿Eliminar permanentemente el ticket {{ record.ticket_folio }}?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-outline-danger btn-sm w-100">
+            <i class="bi bi-trash me-1"></i>Eliminar Ticket
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

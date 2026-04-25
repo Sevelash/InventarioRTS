@@ -124,6 +124,28 @@ p, li, td, th, label, span, input, select, textarea, button {
   letter-spacing: .12em;
   color: rgba(255,255,255,.35);
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  transition: color .15s;
+}
+.nav-section:hover {
+  color: rgba(255,255,255,.6);
+}
+.nav-section .section-chevron {
+  font-size: 10px;
+  opacity: .5;
+  transition: transform .22s ease, opacity .15s;
+  flex-shrink: 0;
+}
+.nav-section.is-collapsed .section-chevron {
+  transform: rotate(-90deg);
+}
+.nav-section-items {
+  overflow: hidden;
+  transition: max-height .25s ease;
 }
 
 .sidebar .nav-link {
@@ -165,6 +187,24 @@ p, li, td, th, label, span, input, select, textarea, button {
   color: rgba(255,255,255,.3);
   text-align: center;
   border-top: 1px solid rgba(255,255,255,.07);
+}
+
+/* ── Sidebar scroll area ──────────────────────────────────── */
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 6px;
+}
+/* Thin scrollbar */
+.sidebar-nav::-webkit-scrollbar { width: 4px; }
+.sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.18);
+  border-radius: 4px;
+}
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,.32);
 }
 
 /* ── Sidebar collapse states ─────────────────────────────── */

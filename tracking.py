@@ -16,6 +16,18 @@ log = logging.getLogger(__name__)
 _BASE     = "https://api.aftership.com/tracking/2024-04"
 _API_KEY  = os.environ.get("AFTERSHIP_API_KEY", "")
 
+
+class AfterShipError(Exception):
+    """Error genérico de la API de AfterShip."""
+    def __init__(self, message: str, code: int = 0):
+        super().__init__(message)
+        self.code = code
+
+
+class AfterShipRateLimitError(AfterShipError):
+    """Se alcanzó el límite de requests del plan AfterShip (429)."""
+    pass
+
 # Carrier slug map (nombre que usamos → slug de AfterShip)
 CARRIER_SLUGS = {
     "DHL":      "dhl",
@@ -65,7 +77,12 @@ def create_tracking(tracking_number: str, carrier: str, title: str = "") -> dict
         # ya existe → lo buscamos directamente
         if r.status_code == 409:
             return get_tracking(tracking_number, carrier)
+        if r.status_code == 429:
+            msg = data.get("meta", {}).get("message", "Límite de requests diarios de AfterShip alcanzado.")
+            raise AfterShipRateLimitError(msg, 429)
         log.error("AfterShip create error %s: %s", r.status_code, data)
+    except AfterShipRateLimitError:
+        raise
     except Exception as e:
         log.exception("AfterShip create_tracking failed: %s", e)
     return {}
@@ -95,7 +112,13 @@ def get_tracking(tracking_number: str, carrier: str) -> dict:
             trackings = r.json().get("data", {}).get("trackings", [])
             if trackings:
                 return trackings[0]
+        if r.status_code == 429:
+            data = r.json()
+            msg = data.get("meta", {}).get("message", "Límite de requests diarios de AfterShip alcanzado.")
+            raise AfterShipRateLimitError(msg, 429)
         log.error("AfterShip get error %s: %s", r.status_code, r.text[:200])
+    except AfterShipRateLimitError:
+        raise
     except Exception as e:
         log.exception("AfterShip get_tracking failed: %s", e)
     return {}

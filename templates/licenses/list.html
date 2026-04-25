@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}Licencias de Software — RTS{% endblock %}
+{% block page_title %}Licencias de Software{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('license_new') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nueva Licencia
+  </a>
+{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([
+  ('Inventory', url_for('inventory_dashboard')),
+  ('Licencias', none)
+]) }}
+
+{# ── Tarjetas resumen ── #}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-2">
+      <div class="fs-4 fw-bold">{{ total }}</div>
+      <div class="text-muted" style="font-size:12px;">Total</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-2 border-success">
+      <div class="fs-4 fw-bold text-success">{{ active_c }}</div>
+      <div class="text-muted" style="font-size:12px;">Activas</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-2 border-warning">
+      <div class="fs-4 fw-bold text-warning">{{ expiring_c }}</div>
+      <div class="text-muted" style="font-size:12px;">Por Vencer (30 días)</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-2 border-danger">
+      <div class="fs-4 fw-bold text-danger">{{ expired_c }}</div>
+      <div class="text-muted" style="font-size:12px;">Vencidas</div>
+    </div>
+  </div>
+</div>
+
+{# ── Filtros ── #}
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <input type="text" name="q" class="form-control form-control-sm"
+               placeholder="Buscar nombre, vendor, tenant…" value="{{ q }}">
+      </div>
+      <div class="col-md-2">
+        <select name="status" class="form-select form-select-sm">
+          <option value="">Estado — todos</option>
+          <option value="active"    {% if fstatus=='active'    %}selected{% endif %}>Activas</option>
+          <option value="expiring"  {% if fstatus=='expiring'  %}selected{% endif %}>Por Vencer</option>
+          <option value="expired"   {% if fstatus=='expired'   %}selected{% endif %}>Vencidas</option>
+          <option value="cancelled" {% if fstatus=='cancelled' %}selected{% endif %}>Canceladas</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="vendor" class="form-select form-select-sm">
+          <option value="">Vendor — todos</option>
+          {% for v in vendors %}
+          <option value="{{ v }}" {% if fvendor==v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="category" class="form-select form-select-sm">
+          <option value="">Categoría — todas</option>
+          {% for val, lbl in category_choices %}
+          <option value="{{ val }}" {% if fcateg==val %}selected{% endif %}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+          <i class="bi bi-search"></i>
+        </button>
+        {% if q or fstatus or fvendor or fcateg %}
+        <a href="{{ url_for('license_list') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x-lg"></i>
+        </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Tabla ── #}
+<div class="card">
+  <div class="card-body p-0">
+    {% if licenses %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" style="font-size:13px;">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">Nombre / Vendor</th>
+            <th>Tipo</th>
+            <th>Categoría</th>
+            <th class="text-center">Asientos</th>
+            <th>Vencimiento</th>
+            <th>Estado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lic in licenses %}
+          <tr>
+            <td class="ps-3">
+              <div class="fw-semibold">
+                {% if lic.is_microsoft %}
+                <i class="bi bi-microsoft text-primary me-1"></i>
+                {% endif %}
+                {{ lic.name }}
+              </div>
+              {% if lic.vendor %}
+              <div class="text-muted" style="font-size:11px;">{{ lic.vendor }}</div>
+              {% endif %}
+              {% if lic.tenant_domain %}
+              <div style="font-size:11px;color:#888;">
+                <i class="bi bi-building me-1"></i>{{ lic.tenant_domain }}
+              </div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge bg-secondary">{{ lic.type_label }}</span>
+            </td>
+            <td class="text-muted">{{ lic.category_label }}</td>
+            <td class="text-center">
+              {% if lic.seat_count %}
+                <span class="{% if lic.available_seats == 0 %}text-danger fw-bold{% elif lic.available_seats <= 2 %}text-warning{% endif %}">
+                  {{ lic.used_seats }}/{{ lic.seat_count }}
+                </span>
+              {% else %}
+                <span class="text-muted">{{ lic.used_seats }} asig.</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if lic.expiry_date %}
+                {% set days = lic.days_until_expiry %}
+                <span class="{% if days is not none and days < 0 %}text-danger{% elif days is not none and days <= 30 %}text-warning fw-semibold{% else %}text-muted{% endif %}">
+                  {{ lic.expiry_date | format_date }}
+                </span>
+                {% if days is not none and days >= 0 and days <= 30 %}
+                <div style="font-size:10px;color:#f0a500;">{{ days }} días</div>
+                {% elif days is not none and days < 0 %}
+                <div style="font-size:10px;color:#dc3545;">Vencida hace {{ days|abs }} días</div>
+                {% endif %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge bg-{{ lic.status_color }}">{{ lic.status_label }}</span>
+            </td>
+            <td class="text-end pe-3">
+              <a href="{{ url_for('license_detail', id=lic.id) }}"
+                 class="btn btn-outline-secondary btn-sm py-0 px-2">
+                <i class="bi bi-eye"></i>
+              </a>
+              <a href="{{ url_for('license_edit', id=lic.id) }}"
+                 class="btn btn-outline-secondary btn-sm py-0 px-2 ms-1">
+                <i class="bi bi-pencil"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-key fs-1 d-block mb-2 opacity-25"></i>
+      No se encontraron licencias.
+      <a href="{{ url_for('license_new') }}" class="d-block mt-2">Agregar primera licencia</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -45,8 +45,16 @@
     {% endif %}
   </a>
 
-  <!-- ── Portal ── -->
-  <div class="nav-section sidebar-text">{{ T.nav_portal }}</div>
+  {% set user_modules = current_user.get('modules', []) if current_user else [] %}
+  {% set is_admin = current_user and current_user.role == 'admin' %}
+
+  <!-- ── Scrollable nav area ── -->
+  <div class="sidebar-nav">
+
+  <!-- Portal (sin colapso) -->
+  <div class="nav-section sidebar-text" style="cursor:default;">
+    <span>{{ T.nav_portal }}</span>
+  </div>
   <a href="{{ url_for('portal') }}"
      class="nav-link {% if request.endpoint == 'portal' %}active{% endif %}"
      title="{{ T.nav_home }}">
@@ -54,146 +62,198 @@
     <span class="sidebar-text">{{ T.nav_home }}</span>
   </a>
 
-  {% set user_modules = current_user.get('modules', []) if current_user else [] %}
-  {% set is_admin = current_user and current_user.role == 'admin' %}
-
   {# ── INVENTORY ── #}
   {% if is_admin or 'inventory' in user_modules %}
-  <div class="nav-section sidebar-text">{{ T.nav_inventory }}</div>
-  <a href="{{ url_for('inventory_dashboard') }}"
-     class="nav-link {% if request.endpoint == 'inventory_dashboard' %}active{% endif %}"
-     title="{{ T.nav_dashboard }}">
-    <i class="bi bi-speedometer2"></i>
-    <span class="sidebar-text">{{ T.nav_dashboard }}</span>
-  </a>
-  <a href="{{ url_for('assets_list') }}"
-     class="nav-link {% if request.endpoint in ('assets_list','asset_detail','asset_edit','asset_new') %}active{% endif %}"
-     title="{{ T.nav_assets }}">
-    <i class="bi bi-laptop"></i>
-    <span class="sidebar-text">{{ T.nav_assets }}</span>
-  </a>
-  <a href="{{ url_for('asset_import') }}"
-     class="nav-link {% if request.endpoint == 'asset_import' %}active{% endif %}"
-     title="Import Assets">
-    <i class="bi bi-file-earmark-arrow-up"></i>
-    <span class="sidebar-text">Import Assets</span>
-  </a>
-  <a href="{{ url_for('categories_list') }}"
-     class="nav-link {% if 'categor' in (request.endpoint or '') %}active{% endif %}"
-     title="{{ T.nav_categories }}">
-    <i class="bi bi-tag"></i>
-    <span class="sidebar-text">{{ T.nav_categories }}</span>
-  </a>
-  <a href="{{ url_for('clients_list') }}"
-     class="nav-link {% if 'client' in (request.endpoint or '') %}active{% endif %}"
-     title="{{ T.nav_clients }}">
-    <i class="bi bi-building"></i>
-    <span class="sidebar-text">{{ T.nav_clients }}</span>
-  </a>
-  <a href="{{ url_for('employees_list') }}"
-     class="nav-link {% if 'employee' in (request.endpoint or '') %}active{% endif %}"
-     title="{{ T.nav_employees }}">
-    <i class="bi bi-people"></i>
-    <span class="sidebar-text">{{ T.nav_employees }}</span>
-  </a>
-  <a href="{{ url_for('assignments_list') }}"
-     class="nav-link {% if 'assignment' in (request.endpoint or '') %}active{% endif %}"
-     title="{{ T.nav_assignments }}">
-    <i class="bi bi-arrow-left-right"></i>
-    <span class="sidebar-text">{{ T.nav_assignments }}</span>
-  </a>
-  <a href="{{ url_for('shipments_list') }}"
-     class="nav-link {% if 'shipment' in (request.endpoint or '') %}active{% endif %}"
-     title="{{ T.nav_shipments }}">
-    <i class="bi bi-truck"></i>
-    <span class="sidebar-text">{{ T.nav_shipments }}</span>
-  </a>
+  {% set inv_active = request.endpoint in ('inventory_dashboard','assets_list','asset_detail','asset_edit','asset_new','asset_import','categories_list','category_new','category_edit','clients_list','client_new','client_edit','employees_list','employee_new','employee_edit','employee_responsiva','employee_offboarding','assignments_list','assignment_new','shipments_list','shipment_new','shipment_detail','shipment_edit','maintenance_list','maintenance_new','maintenance_detail','maintenance_edit','license_list','license_new','license_detail','license_edit') %}
+  <div class="nav-section sidebar-text" data-section="inventory" data-active="{{ 'true' if inv_active else 'false' }}">
+    <span>{{ T.nav_inventory }}</span>
+    <i class="bi bi-chevron-down section-chevron sidebar-text"></i>
+  </div>
+  <div class="nav-section-items" id="nav-inventory">
+    <a href="{{ url_for('inventory_dashboard') }}"
+       class="nav-link {% if request.endpoint == 'inventory_dashboard' %}active{% endif %}"
+       title="{{ T.nav_dashboard }}">
+      <i class="bi bi-speedometer2"></i>
+      <span class="sidebar-text">{{ T.nav_dashboard }}</span>
+    </a>
+    <a href="{{ url_for('assets_list') }}"
+       class="nav-link {% if request.endpoint in ('assets_list','asset_detail','asset_edit','asset_new') %}active{% endif %}"
+       title="{{ T.nav_assets }}">
+      <i class="bi bi-laptop"></i>
+      <span class="sidebar-text">{{ T.nav_assets }}</span>
+    </a>
+    <a href="{{ url_for('asset_import') }}"
+       class="nav-link {% if request.endpoint == 'asset_import' %}active{% endif %}"
+       title="Import Assets">
+      <i class="bi bi-file-earmark-arrow-up"></i>
+      <span class="sidebar-text">Import Assets</span>
+    </a>
+    <a href="{{ url_for('categories_list') }}"
+       class="nav-link {% if 'categor' in (request.endpoint or '') %}active{% endif %}"
+       title="{{ T.nav_categories }}">
+      <i class="bi bi-tag"></i>
+      <span class="sidebar-text">{{ T.nav_categories }}</span>
+    </a>
+    <a href="{{ url_for('clients_list') }}"
+       class="nav-link {% if 'client' in (request.endpoint or '') %}active{% endif %}"
+       title="{{ T.nav_clients }}">
+      <i class="bi bi-building"></i>
+      <span class="sidebar-text">{{ T.nav_clients }}</span>
+    </a>
+    <a href="{{ url_for('employees_list') }}"
+       class="nav-link {% if 'employee' in (request.endpoint or '') %}active{% endif %}"
+       title="{{ T.nav_employees }}">
+      <i class="bi bi-people"></i>
+      <span class="sidebar-text">{{ T.nav_employees }}</span>
+    </a>
+    <a href="{{ url_for('assignments_list') }}"
+       class="nav-link {% if 'assignment' in (request.endpoint or '') %}active{% endif %}"
+       title="{{ T.nav_assignments }}">
+      <i class="bi bi-arrow-left-right"></i>
+      <span class="sidebar-text">{{ T.nav_assignments }}</span>
+    </a>
+    <a href="{{ url_for('shipments_list') }}"
+       class="nav-link {% if 'shipment' in (request.endpoint or '') %}active{% endif %}"
+       title="{{ T.nav_shipments }}">
+      <i class="bi bi-truck"></i>
+      <span class="sidebar-text">{{ T.nav_shipments }}</span>
+    </a>
+    <a href="{{ url_for('maintenance_list') }}"
+       class="nav-link {% if 'maintenance' in (request.endpoint or '') %}active{% endif %}"
+       title="Mantenimiento">
+      <i class="bi bi-wrench-adjustable"></i>
+      <span class="sidebar-text">Mantenimiento</span>
+    </a>
+    <a href="{{ url_for('license_list') }}"
+       class="nav-link {% if 'license' in (request.endpoint or '') %}active{% endif %}"
+       title="Licencias">
+      <i class="bi bi-key"></i>
+      <span class="sidebar-text">
+        Licencias
+        {% if license_alerts %}
+        <span class="badge bg-warning text-dark ms-1" style="font-size:10px;">{{ license_alerts }}</span>
+        {% endif %}
+      </span>
+    </a>
+  </div>
   {% endif %}
 
   {# ── PROJECTS ── #}
   {% if is_admin or 'projects' in user_modules %}
-  <div class="nav-section sidebar-text">{{ T.nav_projects }}</div>
-  <a href="{{ url_for('projects.dashboard') }}"
-     class="nav-link {% if request.endpoint == 'projects.dashboard' %}active{% endif %}"
-     title="{{ T.nav_dashboard }}">
-    <i class="bi bi-speedometer2"></i>
-    <span class="sidebar-text">{{ T.nav_dashboard }}</span>
-  </a>
-  <a href="{{ url_for('projects.project_list') }}"
-     class="nav-link {% if request.endpoint in ('projects.project_list','projects.project_detail','projects.project_new','projects.project_edit') %}active{% endif %}"
-     title="{{ T.nav_all_projects }}">
-    <i class="bi bi-kanban"></i>
-    <span class="sidebar-text">{{ T.nav_all_projects }}</span>
-  </a>
-  <a href="{{ url_for('projects.my_tasks') }}"
-     class="nav-link {% if request.endpoint == 'projects.my_tasks' %}active{% endif %}"
-     title="My Tasks">
-    <i class="bi bi-check2-square"></i>
-    <span class="sidebar-text">My Tasks</span>
-  </a>
-  <a href="{{ url_for('projects.project_list') }}"
-     class="nav-link {% if request.endpoint == 'projects.project_gantt' %}active{% endif %}"
-     title="Gantt View">
-    <i class="bi bi-bar-chart-steps"></i>
-    <span class="sidebar-text">Gantt</span>
-  </a>
+  {% set proj_active = request.blueprint == 'projects' %}
+  <div class="nav-section sidebar-text" data-section="projects" data-active="{{ 'true' if proj_active else 'false' }}">
+    <span>{{ T.nav_projects }}</span>
+    <i class="bi bi-chevron-down section-chevron sidebar-text"></i>
+  </div>
+  <div class="nav-section-items" id="nav-projects">
+    <a href="{{ url_for('projects.dashboard') }}"
+       class="nav-link {% if request.endpoint == 'projects.dashboard' %}active{% endif %}"
+       title="{{ T.nav_dashboard }}">
+      <i class="bi bi-speedometer2"></i>
+      <span class="sidebar-text">{{ T.nav_dashboard }}</span>
+    </a>
+    <a href="{{ url_for('projects.project_list') }}"
+       class="nav-link {% if request.endpoint in ('projects.project_list','projects.project_detail','projects.project_new','projects.project_edit') %}active{% endif %}"
+       title="{{ T.nav_all_projects }}">
+      <i class="bi bi-kanban"></i>
+      <span class="sidebar-text">{{ T.nav_all_projects }}</span>
+    </a>
+    <a href="{{ url_for('projects.my_tasks') }}"
+       class="nav-link {% if request.endpoint == 'projects.my_tasks' %}active{% endif %}"
+       title="My Tasks">
+      <i class="bi bi-check2-square"></i>
+      <span class="sidebar-text">My Tasks</span>
+    </a>
+    <a href="{{ url_for('projects.project_list') }}"
+       class="nav-link {% if request.endpoint == 'projects.project_gantt' %}active{% endif %}"
+       title="Gantt View">
+      <i class="bi bi-bar-chart-steps"></i>
+      <span class="sidebar-text">Gantt</span>
+    </a>
+  </div>
   {% endif %}
 
   {# ── EVALUATION ── #}
   {% if is_admin or 'evaluation' in user_modules %}
-  <div class="nav-section sidebar-text">{{ T.nav_evaluation }}</div>
-  <a href="{{ url_for('eval.index') }}"
-     class="nav-link {% if request.blueprint == 'eval' %}active{% endif %}"
-     title="{{ T.nav_eval }}">
-    <i class="bi bi-clipboard-check"></i>
-    <span class="sidebar-text">{{ T.nav_eval }}</span>
-  </a>
+  {% set eval_active = request.blueprint == 'eval' %}
+  <div class="nav-section sidebar-text" data-section="evaluation" data-active="{{ 'true' if eval_active else 'false' }}">
+    <span>{{ T.nav_evaluation }}</span>
+    <i class="bi bi-chevron-down section-chevron sidebar-text"></i>
+  </div>
+  <div class="nav-section-items" id="nav-evaluation">
+    <a href="{{ url_for('eval.index') }}"
+       class="nav-link {% if request.blueprint == 'eval' %}active{% endif %}"
+       title="{{ T.nav_eval }}">
+      <i class="bi bi-clipboard-check"></i>
+      <span class="sidebar-text">{{ T.nav_eval }}</span>
+    </a>
+  </div>
   {% endif %}
 
   {# ── REPOSITORY ── #}
   {% if is_admin or 'repository' in user_modules %}
-  <div class="nav-section sidebar-text">{{ T.nav_repository }}</div>
-  <a href="{{ url_for('repo.index') }}"
-     class="nav-link {% if request.blueprint == 'repo' %}active{% endif %}"
-     title="{{ T.nav_repo }}">
-    <i class="bi bi-folder2-open"></i>
-    <span class="sidebar-text">{{ T.nav_repo }}</span>
-  </a>
+  {% set repo_active = request.blueprint == 'repo' %}
+  <div class="nav-section sidebar-text" data-section="repository" data-active="{{ 'true' if repo_active else 'false' }}">
+    <span>{{ T.nav_repository }}</span>
+    <i class="bi bi-chevron-down section-chevron sidebar-text"></i>
+  </div>
+  <div class="nav-section-items" id="nav-repository">
+    <a href="{{ url_for('repo.index') }}"
+       class="nav-link {% if request.blueprint == 'repo' %}active{% endif %}"
+       title="{{ T.nav_repo }}">
+      <i class="bi bi-folder2-open"></i>
+      <span class="sidebar-text">{{ T.nav_repo }}</span>
+    </a>
+  </div>
   {% endif %}
 
-  {# ── SETUP / CONFIGURACIÓN ── #}
+  {# ── CONFIGURACIÓN ── #}
   {% if current_user and current_user.role == 'admin' %}
-  <div class="nav-section sidebar-text">Configuración</div>
-  <a href="{{ url_for('setup_index') }}"
-     class="nav-link {% if request.endpoint and 'setup' in (request.endpoint or '') and 'label' not in (request.endpoint or '') %}active{% endif %}"
-     title="Catálogos Iniciales">
-    <i class="bi bi-gear-wide-connected"></i>
-    <span class="sidebar-text">Catálogos</span>
-  </a>
-  <a href="{{ url_for('labels_index') }}"
-     class="nav-link {% if 'label' in (request.endpoint or '') %}active{% endif %}"
-     title="Etiquetas">
-    <i class="bi bi-printer"></i>
-    <span class="sidebar-text">Etiquetas</span>
-  </a>
+  {% set setup_active = request.endpoint and ('setup' in (request.endpoint or '') or 'label' in (request.endpoint or '')) %}
+  <div class="nav-section sidebar-text" data-section="configuracion" data-active="{{ 'true' if setup_active else 'false' }}">
+    <span>Configuración</span>
+    <i class="bi bi-chevron-down section-chevron sidebar-text"></i>
+  </div>
+  <div class="nav-section-items" id="nav-configuracion">
+    <a href="{{ url_for('setup_index') }}"
+       class="nav-link {% if request.endpoint and 'setup' in (request.endpoint or '') and 'label' not in (request.endpoint or '') %}active{% endif %}"
+       title="Catálogos Iniciales">
+      <i class="bi bi-gear-wide-connected"></i>
+      <span class="sidebar-text">Catálogos</span>
+    </a>
+    <a href="{{ url_for('labels_index') }}"
+       class="nav-link {% if 'label' in (request.endpoint or '') %}active{% endif %}"
+       title="Etiquetas">
+      <i class="bi bi-printer"></i>
+      <span class="sidebar-text">Etiquetas</span>
+    </a>
+  </div>
   {% endif %}
 
   {# ── ADMIN ── #}
   {% if current_user and current_user.role == 'admin' %}
-  <div class="nav-section sidebar-text">{{ T.nav_admin }}</div>
-  <a href="{{ url_for('admin.index') }}"
-     class="nav-link {% if request.endpoint and request.endpoint.startswith('admin.') and request.endpoint != 'admin.logs' %}active{% endif %}"
-     title="{{ T.nav_admin_panel }}">
-    <i class="bi bi-shield-lock"></i>
-    <span class="sidebar-text">{{ T.nav_admin_panel }}</span>
-  </a>
-  <a href="{{ url_for('admin.logs') }}"
-     class="nav-link {% if request.endpoint == 'admin.logs' %}active{% endif %}"
-     title="{{ T.nav_logs }}">
-    <i class="bi bi-journal-text"></i>
-    <span class="sidebar-text">{{ T.nav_logs }}</span>
-  </a>
+  {% set admin_active = request.endpoint and request.endpoint.startswith('admin.') %}
+  <div class="nav-section sidebar-text" data-section="admin" data-active="{{ 'true' if admin_active else 'false' }}">
+    <span>{{ T.nav_admin }}</span>
+    <i class="bi bi-chevron-down section-chevron sidebar-text"></i>
+  </div>
+  <div class="nav-section-items" id="nav-admin">
+    <a href="{{ url_for('admin.index') }}"
+       class="nav-link {% if request.endpoint and request.endpoint.startswith('admin.') and request.endpoint != 'admin.logs' %}active{% endif %}"
+       title="{{ T.nav_admin_panel }}">
+      <i class="bi bi-shield-lock"></i>
+      <span class="sidebar-text">{{ T.nav_admin_panel }}</span>
+    </a>
+    <a href="{{ url_for('admin.logs') }}"
+       class="nav-link {% if request.endpoint == 'admin.logs' %}active{% endif %}"
+       title="{{ T.nav_logs }}">
+      <i class="bi bi-journal-text"></i>
+      <span class="sidebar-text">{{ T.nav_logs }}</span>
+    </a>
+  </div>
   {% endif %}
+
+  </div><!-- /sidebar-nav -->
 
   <!-- Sidebar footer -->
   <div class="sidebar-footer">
@@ -392,6 +452,44 @@
     const nowCollapsed = !document.body.classList.contains('sidebar-collapsed');
     applyCollapsed(nowCollapsed, true);
     localStorage.setItem(STORAGE_KEY, nowCollapsed ? '1' : '0');
+  });
+
+  // ── Collapsible nav sections ──────────────────────────────
+  const SECTIONS_KEY = 'rts_nav_sections';
+  function getSectionState() {
+    try { return JSON.parse(localStorage.getItem(SECTIONS_KEY)) || {}; } catch { return {}; }
+  }
+  function saveSectionState(state) {
+    localStorage.setItem(SECTIONS_KEY, JSON.stringify(state));
+  }
+
+  document.querySelectorAll('.nav-section[data-section]').forEach(header => {
+    const id      = header.dataset.section;
+    const items   = document.getElementById('nav-' + id);
+    const chevron = header.querySelector('.section-chevron');
+    if (!items) return;
+
+    const hasActive  = !!items.querySelector('.nav-link.active');
+    const savedState = getSectionState();
+    // Active section always opens; others: use saved state (default open)
+    const isOpen = hasActive ? true : (savedState[id] !== false);
+
+    function applyState(open, animate) {
+      if (!animate) items.style.transition = 'none';
+      items.style.maxHeight = open ? items.scrollHeight + 'px' : '0';
+      header.classList.toggle('is-collapsed', !open);
+      if (!animate) requestAnimationFrame(() => items.style.transition = '');
+    }
+
+    applyState(isOpen, false);
+
+    header.addEventListener('click', () => {
+      const nowOpen = header.classList.contains('is-collapsed');
+      applyState(nowOpen, true);
+      const s = getSectionState();
+      s[id] = nowOpen;
+      saveSectionState(s);
+    });
   });
 
   // ── Flash auto-dismiss (4 s for success/info, 8 s for warn/danger) ──

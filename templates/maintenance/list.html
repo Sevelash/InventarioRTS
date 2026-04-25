@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}Mantenimiento — RTS{% endblock %}
+{% block page_title %}Mantenimiento de Activos{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('maintenance_new') }}" class="btn btn-rts btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nuevo Ticket
+  </a>
+{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([('Inventory', url_for('inventory_dashboard')), ('Mantenimiento', none)]) }}
+
+{# ── Contadores ── #}
+<div class="row g-3 mb-3">
+  {% set counter_data = [
+    ('total',      'Total',       'bi-wrench-adjustable', '#233C6E', counts.total),
+    ('pendiente',  'Pendientes',  'bi-hourglass-split',   '#FFA000', counts.pendiente),
+    ('en_proceso', 'En Proceso',  'bi-gear-fill',         '#089ACF', counts.en_proceso),
+    ('completado', 'Completados', 'bi-check-circle-fill', '#2e7d32', counts.completado),
+    ('cerrado',    'Cerrados',    'bi-archive-fill',      '#6c757d', counts.cerrado),
+  ] %}
+  {% for key, label, icon, color, val in counter_data %}
+  <div class="col-6 col-md">
+    <a href="{{ url_for('maintenance_list', status=key if key != 'total' else '') }}"
+       class="card text-decoration-none h-100 {% if status_filter == key or (key == 'total' and not status_filter) %}border-primary{% endif %}">
+      <div class="card-body py-3 px-3 d-flex align-items-center gap-3">
+        <i class="bi {{ icon }}" style="font-size:1.6rem;color:{{ color }};"></i>
+        <div>
+          <div class="fw-bold" style="font-size:1.4rem;color:{{ color }};">{{ val }}</div>
+          <div class="text-muted" style="font-size:12px;">{{ label }}</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Filtros ── #}
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-auto">
+        <select name="status" class="form-select form-select-sm">
+          <option value="">Todos los estados</option>
+          <option value="pendiente"  {% if status_filter=='pendiente'  %}selected{% endif %}>Pendiente</option>
+          <option value="en_proceso" {% if status_filter=='en_proceso' %}selected{% endif %}>En Proceso</option>
+          <option value="completado" {% if status_filter=='completado' %}selected{% endif %}>Completado</option>
+          <option value="cerrado"    {% if status_filter=='cerrado'    %}selected{% endif %}>Cerrado</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <select name="type" class="form-select form-select-sm">
+          <option value="">Todos los tipos</option>
+          <option value="preventivo"  {% if type_filter=='preventivo'  %}selected{% endif %}>Preventivo</option>
+          <option value="correctivo"  {% if type_filter=='correctivo'  %}selected{% endif %}>Correctivo</option>
+          <option value="mejora"      {% if type_filter=='mejora'      %}selected{% endif %}>De Mejora</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
+        <a href="{{ url_for('maintenance_list') }}" class="btn btn-outline-secondary btn-sm">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Tabla ── #}
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between py-3">
+    <span><i class="bi bi-wrench-adjustable me-2"></i>{{ records|length }} ticket(s)</span>
+  </div>
+  <div class="card-body p-0">
+    {% if records %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" style="font-size:13.5px;">
+        <thead>
+          <tr>
+            <th class="ps-3">Folio</th>
+            <th>Activo</th>
+            <th>Tipo</th>
+            <th>Estado</th>
+            <th>Reportado</th>
+            <th>Reportado por</th>
+            <th>Descripción</th>
+            <th class="text-end pe-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in records %}
+          <tr>
+            <td class="ps-3">
+              <a href="{{ url_for('maintenance_detail', id=r.id) }}"
+                 class="fw-semibold text-decoration-none">{{ r.ticket_folio }}</a>
+            </td>
+            <td>
+              <a href="{{ url_for('asset_detail', id=r.asset_id) }}"
+                 class="text-decoration-none">{{ r.asset.name }}</a>
+              <div><small class="asset-tag-badge">{{ r.asset.asset_tag }}</small></div>
+            </td>
+            <td><span class="badge bg-{{ r.type_color }}">{{ r.type_label }}</span></td>
+            <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span></td>
+            <td>{{ r.reported_date | format_date if r.reported_date else '—' }}</td>
+            <td>{{ r.reported_by or '—' }}</td>
+            <td style="max-width:220px;">
+              <span class="text-truncate d-block" style="max-width:220px;" title="{{ r.description or '' }}">
+                {{ r.description or '—' }}
+              </span>
+            </td>
+            <td class="text-end pe-3">
+              <a href="{{ url_for('maintenance_detail', id=r.id) }}"
+                 class="btn btn-sm btn-outline-primary py-0 px-2" title="Ver detalle">
+                <i class="bi bi-eye"></i>
+              </a>
+              <a href="{{ url_for('maintenance_pdf', id=r.id) }}"
+                 class="btn btn-sm btn-outline-danger py-0 px-2" title="Descargar FO-SGSI-20">
+                <i class="bi bi-file-earmark-pdf"></i>
+              </a>
+              <a href="{{ url_for('maintenance_edit', id=r.id) }}"
+                 class="btn btn-sm btn-outline-secondary py-0 px-2" title="Editar">
+                <i class="bi bi-pencil"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-wrench-adjustable d-block"></i>
+      No hay tickets de mantenimiento{% if status_filter or type_filter %} con los filtros seleccionados{% endif %}.
+      <div class="mt-2">
+        <a href="{{ url_for('maintenance_new') }}" class="btn btn-rts btn-sm">
+          <i class="bi bi-plus-lg me-1"></i>Crear primer ticket
+        </a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

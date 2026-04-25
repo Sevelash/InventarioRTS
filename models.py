@@ -4,6 +4,29 @@ from datetime import datetime, timedelta
 
 db = SQLAlchemy()
 
+
+class AppSetting(db.Model):
+    """Configuración clave-valor genérica de la aplicación (API keys, integraciones, etc.)."""
+    __tablename__ = 'app_settings'
+    key   = db.Column(db.String(100), primary_key=True)
+    value = db.Column(db.Text)
+
+    @classmethod
+    def get(cls, key, default=None):
+        row = cls.query.get(key)
+        return row.value if row else default
+
+    @classmethod
+    def set(cls, key, value):
+        row = cls.query.get(key)
+        if row:
+            row.value = value if value is not None else ''
+        else:
+            db.session.add(cls(key=key, value=value or ''))
+
+    def __repr__(self):
+        return f'<AppSetting {self.key}>'
+
 # All available modules — order matters for display
 ALL_MODULES = [
     {'slug': 'inventory',   'name': 'Inventory Management', 'icon': 'bi-laptop',         'color': '#089ACF', 'desc': 'Asset tracking & lifecycle management'},
@@ -312,6 +335,13 @@ class Asset(db.Model):
     brand_id          = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=True)
     purchase_order_id = db.Column(db.Integer, db.ForeignKey('purchase_orders.id'), nullable=True)
     invoice_id        = db.Column(db.Integer, db.ForeignKey('invoices.id'), nullable=True)
+    # ── Absolute Secure Endpoint ──────────────────────────────────────────────
+    absolute_id       = db.Column(db.String(100), nullable=True)   # UID en Absolute
+    absolute_status   = db.Column(db.String(30),  nullable=True)   # Active|Inactive|Stolen…
+    absolute_username = db.Column(db.String(150), nullable=True)   # último usuario logueado
+    absolute_last_seen= db.Column(db.DateTime,    nullable=True)   # último check-in (UTC)
+    absolute_sync_at  = db.Column(db.DateTime,    nullable=True)   # cuándo sincronizamos
+    # ─────────────────────────────────────────────────────────────────────────
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     assignments = db.relationship('Assignment', backref='asset', lazy=True,
@@ -607,6 +637,276 @@ class AccessRequest(db.Model):
 
     def __repr__(self):
         return f'<AccessRequest {self.user_name} → {self.module_slug} [{self.status}]>'
+
+
+class Maintenance(db.Model):
+    __tablename__ = 'maintenance'
+    id              = db.Column(db.Integer, primary_key=True)
+    asset_id        = db.Column(db.Integer, db.ForeignKey('assets.id'), nullable=False)
+
+    # Identificación del ticket
+    ticket_folio        = db.Column(db.String(50))          # AC-001
+    maintenance_type    = db.Column(db.String(20), nullable=False, default='correctivo')
+    status              = db.Column(db.String(20), default='pendiente')
+    prev_asset_status   = db.Column(db.String(30))          # para restaurar al cerrar
+
+    # Quién / cuándo reportó
+    reported_date       = db.Column(db.Date)
+    reported_by         = db.Column(db.String(150))         # nombre y cargo
+
+    # Proceso
+    process_name        = db.Column(db.String(150))
+    process_responsible = db.Column(db.String(150))
+
+    # Fuente de la no conformidad (clave del checkbox)
+    nc_source           = db.Column(db.String(100))
+
+    # Descripción del problema
+    description         = db.Column(db.Text)
+
+    # Análisis de causa raíz (FO-SGSI-20 sección 2)
+    analysis_method     = db.Column(db.String(150))
+    participants        = db.Column(db.String(300))
+    root_cause_analysis = db.Column(db.Text)     # desarrollo
+    root_cause          = db.Column(db.Text)     # causa raíz identificada
+    correction_desc     = db.Column(db.Text)     # corrección realizada/a realizar
+
+    # Plan de acción (JSON: [{task, responsible, deadline}])
+    action_plan         = db.Column(db.Text)
+    proposed_close_date = db.Column(db.Date)
+
+    # Seguimiento y cierre
+    followup_responsible = db.Column(db.String(150))
+    close_responsible    = db.Column(db.String(150))
+    effectiveness_ok     = db.Column(db.Boolean)
+    effectiveness_notes  = db.Column(db.Text)
+    actual_close_date    = db.Column(db.Date)
+
+    # Archivos
+    document_path  = db.Column(db.String(500))   # formato firmado subido
+    document_name  = db.Column(db.String(200))
+    photos         = db.Column(db.Text)           # JSON [{path,name,photo_type,caption}]
+
+    # Notas internas
+    notes          = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    asset = db.relationship('Asset', backref='maintenance_records')
+
+    # ── Catálogos ──────────────────────────────────────────────
+    TYPE_CHOICES = [
+        ('preventivo', 'Preventivo'),
+        ('correctivo', 'Correctivo'),
+        ('mejora',     'De Mejora'),
+    ]
+    STATUS_CHOICES = [
+        ('pendiente',   'Pendiente'),
+        ('en_proceso',  'En Proceso'),
+        ('completado',  'Completado'),
+        ('cerrado',     'Cerrado'),
+    ]
+    NC_SOURCES = [
+        ('quejas',        'Quejas y reclamos recurrentes de los usuarios'),
+        ('auditoria',     'Informes de Auditoría Interna o Externa'),
+        ('direccion',     'Resultados de la Revisión por la Dirección'),
+        ('satisfaccion',  'Resultados de las Mediciones de Satisfacción'),
+        ('indicadores',   'Mediciones de Indicadores'),
+        ('autoevaluacion','Resultados de Autoevaluación'),
+        ('riesgos',       'Gestión de Riesgos'),
+        ('otro',          'Otro'),
+    ]
+
+    STATUS_COLORS = {
+        'pendiente':  'warning',
+        'en_proceso': 'primary',
+        'completado': 'success',
+        'cerrado':    'secondary',
+    }
+    TYPE_COLORS = {
+        'preventivo': 'info',
+        'correctivo': 'danger',
+        'mejora':     'success',
+    }
+
+    @property
+    def status_label(self):
+        return dict(self.STATUS_CHOICES).get(self.status, self.status)
+
+    @property
+    def status_color(self):
+        return self.STATUS_COLORS.get(self.status, 'secondary')
+
+    @property
+    def type_label(self):
+        return dict(self.TYPE_CHOICES).get(self.maintenance_type, self.maintenance_type)
+
+    @property
+    def type_color(self):
+        return self.TYPE_COLORS.get(self.maintenance_type, 'secondary')
+
+    @property
+    def photos_list(self):
+        if self.photos:
+            import json as _j
+            try:
+                return _j.loads(self.photos)
+            except Exception:
+                return []
+        return []
+
+    @property
+    def action_plan_list(self):
+        if self.action_plan:
+            import json as _j
+            try:
+                return _j.loads(self.action_plan)
+            except Exception:
+                return []
+        return []
+
+    def __repr__(self):
+        return f'<Maintenance #{self.id} Asset:{self.asset_id} [{self.maintenance_type}]>'
+
+
+class License(db.Model):
+    """Registro maestro de una licencia de software."""
+    __tablename__ = 'licenses'
+    id           = db.Column(db.Integer, primary_key=True)
+
+    # Identificación
+    name         = db.Column(db.String(200), nullable=False)   # "Microsoft 365 Business Premium"
+    vendor       = db.Column(db.String(100))                   # Microsoft, Adobe, etc.
+    software     = db.Column(db.String(150))                   # nombre del producto/SKU
+    category     = db.Column(db.String(50))                    # office_suite | os | antivirus | …
+    license_type = db.Column(db.String(30), default='subscription')
+    license_key  = db.Column(db.String(500))                   # clave de producto (non-MS)
+
+    # ── Microsoft 365 / Azure ──────────────────────────────────────────────
+    is_microsoft    = db.Column(db.Boolean, default=False)
+    tenant_id       = db.Column(db.String(100))   # Azure AD Directory / Tenant ID
+    tenant_name     = db.Column(db.String(200))   # nombre de la organización
+    tenant_domain   = db.Column(db.String(200))   # ej. company.onmicrosoft.com
+    subscription_id = db.Column(db.String(100))   # GUID de la suscripción MS
+    sku_name        = db.Column(db.String(100))   # ej. "ENTERPRISEPREMIUM"
+
+    # Asientos
+    seat_count   = db.Column(db.Integer)           # NULL = OEM/unidad única
+
+    # Financiero
+    purchase_cost  = db.Column(db.Float)
+    renewal_cost   = db.Column(db.Float)
+    currency       = db.Column(db.String(10), default='MXN')
+
+    # Fechas
+    purchase_date  = db.Column(db.Date)
+    expiry_date    = db.Column(db.Date)
+    renewal_date   = db.Column(db.Date)
+
+    # Estado
+    status   = db.Column(db.String(20), default='active')  # active|expiring|expired|cancelled
+
+    notes      = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    assignments = db.relationship('LicenseAssignment', backref='license',
+                                  lazy=True, cascade='all, delete-orphan',
+                                  order_by='LicenseAssignment.assigned_date.desc()')
+
+    # ── Catálogos ──────────────────────────────────────────────────────────
+    CATEGORY_CHOICES = [
+        ('office_suite',  'Suite de Oficina'),
+        ('os',            'Sistema Operativo'),
+        ('antivirus',     'Antivirus / Seguridad'),
+        ('design',        'Diseño / Creativo'),
+        ('dev_tools',     'Herramientas Dev'),
+        ('communication', 'Comunicación / Video'),
+        ('erp',           'ERP / CRM'),
+        ('other',         'Otro'),
+    ]
+    TYPE_CHOICES = [
+        ('subscription', 'Suscripción'),
+        ('perpetual',    'Perpetua'),
+        ('oem',          'OEM'),
+        ('volume',       'Volumen'),
+        ('trial',        'Trial / Demo'),
+    ]
+    CURRENCY_CHOICES = ['MXN', 'USD', 'EUR']
+    STATUS_COLORS  = {'active': 'success', 'expiring': 'warning',
+                      'expired': 'danger',  'cancelled': 'secondary'}
+    STATUS_LABELS  = {'active': 'Activa', 'expiring': 'Por Vencer',
+                      'expired': 'Vencida', 'cancelled': 'Cancelada'}
+
+    @property
+    def effective_status(self):
+        if self.status == 'cancelled':
+            return 'cancelled'
+        if self.expiry_date:
+            from datetime import date as _d
+            today = _d.today()
+            if self.expiry_date < today:
+                return 'expired'
+            if (self.expiry_date - today).days <= 30:
+                return 'expiring'
+        return 'active'
+
+    @property
+    def status_label(self):
+        return self.STATUS_LABELS.get(self.effective_status, self.effective_status)
+
+    @property
+    def status_color(self):
+        return self.STATUS_COLORS.get(self.effective_status, 'secondary')
+
+    @property
+    def used_seats(self):
+        return len(self.assignments)
+
+    @property
+    def available_seats(self):
+        if self.seat_count is None:
+            return None
+        return max(0, self.seat_count - self.used_seats)
+
+    @property
+    def days_until_expiry(self):
+        if not self.expiry_date:
+            return None
+        from datetime import date as _d
+        return (self.expiry_date - _d.today()).days
+
+    @property
+    def category_label(self):
+        return dict(self.CATEGORY_CHOICES).get(self.category, self.category or '—')
+
+    @property
+    def type_label(self):
+        return dict(self.TYPE_CHOICES).get(self.license_type, self.license_type or '—')
+
+    def __repr__(self):
+        return f'<License {self.name}>'
+
+
+class LicenseAssignment(db.Model):
+    """Un seat/asiento de una licencia asignado a un empleado o activo."""
+    __tablename__ = 'license_assignments'
+    id          = db.Column(db.Integer, primary_key=True)
+    license_id  = db.Column(db.Integer,
+                            db.ForeignKey('licenses.id', ondelete='CASCADE'),
+                            nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=True)
+    asset_id    = db.Column(db.Integer, db.ForeignKey('assets.id'),    nullable=True)
+    assigned_date = db.Column(db.Date)
+    notes       = db.Column(db.Text)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    employee = db.relationship('Employee', backref='license_assignments', lazy=True)
+    asset    = db.relationship('Asset',    backref='license_assignments', lazy=True)
+
+    def __repr__(self):
+        return f'<LicenseAssignment lic={self.license_id} emp={self.employee_id} asset={self.asset_id}>'
 
 
 def log_action(action, entity_type, entity_id=None, entity_name=None, details=None):

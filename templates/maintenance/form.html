@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}{{ 'Editar' if record else 'Nuevo' }} Ticket de Mantenimiento — RTS{% endblock %}
+{% block page_title %}{{ 'Editar' if record else 'Nuevo' }} Ticket de Mantenimiento{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('maintenance_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([
+  ('Inventory', url_for('inventory_dashboard')),
+  ('Mantenimiento', url_for('maintenance_list')),
+  (('Editar ' + record.ticket_folio) if record else 'Nuevo Ticket', none)
+]) }}
+
+<form method="post" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="row g-3">
+    {# ── Col izquierda ── #}
+    <div class="col-lg-8">
+
+      {# ① Información General #}
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-info-circle me-2"></i>① Información General</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Activo <span class="text-danger">*</span></label>
+              <select name="asset_id" class="form-select" required {% if record %}disabled{% endif %}>
+                <option value="">Seleccionar activo...</option>
+                {% for a in assets %}
+                <option value="{{ a.id }}"
+                  {% if (record and record.asset_id == a.id) or (not record and pre_asset_id == a.id) %}selected{% endif %}>
+                  {{ a.name }} — {{ a.asset_tag }}
+                  {% if a.status == 'maintenance' %} [En Mantenimiento]{% endif %}
+                </option>
+                {% endfor %}
+              </select>
+              {% if record %}
+              <input type="hidden" name="asset_id" value="{{ record.asset_id }}">
+              {% endif %}
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Folio del Ticket</label>
+              <input type="text" name="ticket_folio" class="form-control"
+                     placeholder="AC-001 / MNT-001"
+                     value="{{ record.ticket_folio if record else '' }}">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Fecha de Reporte</label>
+              <input type="date" name="reported_date" class="form-control"
+                     value="{{ record.reported_date.isoformat() if record and record.reported_date else today.isoformat() }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Reportado por (Nombre y Cargo)</label>
+              <input type="text" name="reported_by" class="form-control"
+                     placeholder="Ej. Juan García — IT Support"
+                     value="{{ record.reported_by or '' if record else '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Tipo de Mantenimiento <span class="text-danger">*</span></label>
+              <div class="d-flex gap-3 mt-1">
+                {% for val, lbl in type_choices %}
+                {% set color = {'preventivo':'info','correctivo':'danger','mejora':'success'}[val] %}
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="maintenance_type"
+                         id="type_{{ val }}" value="{{ val }}"
+                         {% if (record and record.maintenance_type == val) or (not record and val == 'correctivo') %}checked{% endif %} required>
+                  <label class="form-check-label" for="type_{{ val }}">
+                    <span class="badge bg-{{ color }}">{{ lbl }}</span>
+                  </label>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ② Proceso y Fuente #}
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-diagram-3 me-2"></i>② Proceso y Fuente</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Proceso</label>
+              <input type="text" name="process_name" class="form-control"
+                     placeholder="Ej. Gestión de Activos IT"
+                     value="{{ record.process_name or '' if record else 'Gestión de Activos IT' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Responsable del Proceso</label>
+              <input type="text" name="process_responsible" class="form-control"
+                     placeholder="Nombre del responsable"
+                     value="{{ record.process_responsible or '' if record else '' }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Fuente de la No Conformidad</label>
+              <select name="nc_source" class="form-select">
+                <option value="">— Seleccionar —</option>
+                {% for val, lbl in nc_sources %}
+                <option value="{{ val }}"
+                  {% if record and record.nc_source == val %}selected{% endif %}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Descripción del Problema / No Conformidad</label>
+              <textarea name="description" class="form-control" rows="3"
+                        placeholder="Describir la falla, problema o aspecto a mejorar...">{{ record.description or '' if record else '' }}</textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ③ Análisis de Causa Raíz #}
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-search me-2"></i>③ Análisis de Causa Raíz <small class="text-muted fw-normal">(FO-SGSI-20 §2)</small></div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Método de Análisis</label>
+              <input type="text" name="analysis_method" class="form-control"
+                     placeholder="Ej. 5 Porqués, Espina de pescado..."
+                     value="{{ record.analysis_method or '' if record else '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Participantes</label>
+              <input type="text" name="participants" class="form-control"
+                     placeholder="Nombres de quienes participaron en el análisis"
+                     value="{{ record.participants or '' if record else '' }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Desarrollo del Análisis</label>
+              <textarea name="root_cause_analysis" class="form-control" rows="4"
+                        placeholder="Descripción del proceso de análisis (diagrama, árbol, etc.)...">{{ record.root_cause_analysis or '' if record else '' }}</textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Causa Raíz Identificada</label>
+              <textarea name="root_cause" class="form-control" rows="2"
+                        placeholder="Causa principal que originó el problema...">{{ record.root_cause or '' if record else '' }}</textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Descripción de la Corrección Realizada o a Realizar</label>
+              <textarea name="correction_desc" class="form-control" rows="3"
+                        placeholder="Acción correctiva inmediata aplicada o propuesta...">{{ record.correction_desc or '' if record else '' }}</textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ④ Plan de Acción #}
+      <div class="card mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-list-check me-2"></i>④ Plan de Acción</span>
+          <button type="button" class="btn btn-outline-primary btn-sm" onclick="addTask()">
+            <i class="bi bi-plus-lg me-1"></i>Agregar tarea
+          </button>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm mb-0" id="plan-table">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3" style="width:45%;">Tarea / Acción</th>
+                  <th style="width:25%;">Responsable</th>
+                  <th style="width:20%;">Fecha Límite</th>
+                  <th style="width:10%;"></th>
+                </tr>
+              </thead>
+              <tbody id="plan-body">
+                {% if record and record.action_plan_list %}
+                  {% for row in record.action_plan_list %}
+                  <tr>
+                    <td class="ps-3"><input type="text" name="task[]" class="form-control form-control-sm" value="{{ row.task }}"></td>
+                    <td><input type="text" name="task_responsible[]" class="form-control form-control-sm" value="{{ row.responsible }}"></td>
+                    <td><input type="date" name="task_deadline[]" class="form-control form-control-sm" value="{{ row.deadline }}"></td>
+                    <td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="this.closest('tr').remove()"><i class="bi bi-trash"></i></button></td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                <tr>
+                  <td class="ps-3"><input type="text" name="task[]" class="form-control form-control-sm" placeholder="Descripción de la tarea..."></td>
+                  <td><input type="text" name="task_responsible[]" class="form-control form-control-sm" placeholder="Nombre"></td>
+                  <td><input type="date" name="task_deadline[]" class="form-control form-control-sm"></td>
+                  <td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="this.closest('tr').remove()"><i class="bi bi-trash"></i></button></td>
+                </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+          <div class="p-3 pt-2">
+            <div class="row g-2">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold" style="font-size:13px;">Fecha de Cierre Propuesta</label>
+                <input type="date" name="proposed_close_date" class="form-control form-control-sm"
+                       value="{{ record.proposed_close_date.isoformat() if record and record.proposed_close_date else '' }}">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ⑤ Seguimiento y Eficacia #}
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-clipboard2-check me-2"></i>⑤ Seguimiento y Eficacia</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Responsable del Seguimiento</label>
+              <input type="text" name="followup_responsible" class="form-control"
+                     value="{{ record.followup_responsible or '' if record else '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Responsable del Cierre</label>
+              <input type="text" name="close_responsible" class="form-control"
+                     value="{{ record.close_responsible or '' if record else '' }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">¿Se eliminó la causa raíz?</label>
+              <div class="d-flex gap-3 mt-1">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="effectiveness_ok" value="1" id="eff_si"
+                    {% if record and record.effectiveness_ok == True %}checked{% endif %}>
+                  <label class="form-check-label" for="eff_si">Sí</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="effectiveness_ok" value="0" id="eff_no"
+                    {% if record and record.effectiveness_ok == False %}checked{% endif %}>
+                  <label class="form-check-label" for="eff_no">No</label>
+                </div>
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Justificación / Notas de Eficacia</label>
+              <textarea name="effectiveness_notes" class="form-control" rows="2"
+                        placeholder="Explicar el resultado de la evaluación...">{{ record.effectiveness_notes or '' if record else '' }}</textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    {# ── Col derecha ── #}
+    <div class="col-lg-4">
+
+      {# Fotos antes #}
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-camera me-2"></i>Fotos ANTES</div>
+        <div class="card-body">
+          <input type="file" name="photos_antes" class="form-control form-control-sm mb-2"
+                 accept="image/*" multiple>
+          <div class="form-text">Sube fotos del equipo antes del mantenimiento.</div>
+          {% if record %}
+          {% set antes = record.photos_list | selectattr('photo_type','eq','antes') | list %}
+          {% if antes %}
+          <div class="row g-1 mt-2">
+            {% for p in antes %}
+            <div class="col-6">
+              <img src="{{ url_for('maintenance_photo', id=record.id, idx=record.photos_list.index(p)) }}"
+                   class="img-fluid rounded" style="height:80px;width:100%;object-fit:cover;">
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% endif %}
+        </div>
+      </div>
+
+      {# Fotos después #}
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-camera-fill me-2"></i>Fotos DESPUÉS</div>
+        <div class="card-body">
+          <input type="file" name="photos_despues" class="form-control form-control-sm mb-2"
+                 accept="image/*" multiple>
+          <div class="form-text">Sube fotos del equipo después del mantenimiento.</div>
+          {% if record %}
+          {% set despues = record.photos_list | selectattr('photo_type','eq','despues') | list %}
+          {% if despues %}
+          <div class="row g-1 mt-2">
+            {% for p in despues %}
+            <div class="col-6">
+              <img src="{{ url_for('maintenance_photo', id=record.id, idx=record.photos_list.index(p)) }}"
+                   class="img-fluid rounded" style="height:80px;width:100%;object-fit:cover;">
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% endif %}
+        </div>
+      </div>
+
+      {# Notas internas #}
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-sticky me-2"></i>Notas Internas</div>
+        <div class="card-body">
+          <textarea name="notes" class="form-control" rows="4"
+                    placeholder="Observaciones adicionales...">{{ record.notes or '' if record else '' }}</textarea>
+        </div>
+      </div>
+
+      {# Botones #}
+      <div class="d-grid gap-2">
+        <button type="submit" class="btn btn-rts">
+          <i class="bi bi-floppy me-1"></i>{{ 'Guardar Cambios' if record else 'Crear Ticket' }}
+        </button>
+        <a href="{{ url_for('maintenance_list') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function addTask() {
+  const tbody = document.getElementById('plan-body');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="ps-3"><input type="text" name="task[]" class="form-control form-control-sm" placeholder="Descripción de la tarea..."></td>
+    <td><input type="text" name="task_responsible[]" class="form-control form-control-sm" placeholder="Nombre"></td>
+    <td><input type="date" name="task_deadline[]" class="form-control form-control-sm"></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="this.closest('tr').remove()"><i class="bi bi-trash"></i></button></td>
+  `;
+  tbody.appendChild(tr);
+}
+</script>
+{% endblock %}

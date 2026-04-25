@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}Offboarding — {{ employee.name }}{% endblock %}
+{% block page_title %}Offboarding de Colaborador{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('employees_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([
+  ('Empleados', url_for('employees_list')),
+  (employee.name, none),
+  ('Offboarding', none)
+]) }}
+
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+
+    {# ── Tarjeta del empleado ── #}
+    <div class="card mb-3" style="border-left:4px solid #dc3545;">
+      <div class="card-body d-flex align-items-center gap-3 py-3">
+        <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0"
+             style="width:52px;height:52px;font-size:1.3rem;background:#dc3545;">
+          {{ employee.name[0].upper() }}
+        </div>
+        <div class="flex-grow-1">
+          <div class="fw-bold fs-5">{{ employee.name }}</div>
+          <div class="text-muted" style="font-size:13px;">
+            <span class="me-3"><i class="bi bi-person-badge me-1"></i>{{ employee.employee_id }}</span>
+            {% if employee.department %}
+            <span class="me-3"><i class="bi bi-diagram-3 me-1"></i>{{ employee.department }}</span>
+            {% endif %}
+            {% if employee.email %}
+            <span><i class="bi bi-envelope me-1"></i>{{ employee.email }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <span class="badge bg-danger fs-6">Proceso de Baja</span>
+      </div>
+    </div>
+
+    {% if assets %}
+    <form method="post" action="{{ url_for('employee_offboarding_pdf', id=employee.id) }}"
+          id="offboarding-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      {# ── Info del offboarding ── #}
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-info-circle me-2"></i>Información de la Baja</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Fecha de Baja <span class="text-danger">*</span></label>
+              <input type="date" name="offboarding_date" class="form-control"
+                     value="{{ today.isoformat() }}" required id="offboarding-date"
+                     onchange="recalcDepreciation()">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Motivo</label>
+              <select name="reason" class="form-select">
+                {% for val, lbl in reasons %}
+                <option value="{{ val }}">{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="return_assets"
+                       id="return_assets" checked>
+                <label class="form-check-label fw-semibold" for="return_assets">
+                  Marcar activos como <strong>Devueltos</strong> al generar el acta
+                </label>
+                <div class="form-text">
+                  Cambia el estado de cada activo a "Disponible" automáticamente.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ── Tabla de activos ── #}
+      <div class="card mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-laptop me-2"></i>Activos a Entregar
+            <span class="badge bg-secondary ms-1">{{ assets|length }}</span>
+          </span>
+          <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" id="selectAll" checked>
+            <label class="form-check-label fw-semibold" for="selectAll" style="font-size:13px;">
+              Seleccionar todos
+            </label>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table mb-0" style="font-size:12.5px;" id="asset-table">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3" style="width:36px;"></th>
+                  <th>Activo</th>
+                  <th class="text-end">Costo Original</th>
+                  <th class="text-center">Antigüedad</th>
+                  <th class="text-center">Deprec. Acum.</th>
+                  <th class="text-end" style="color:#1A3C34;">Valor Actual</th>
+                  <th style="min-width:200px;">Condición</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for asset in assets %}
+                {% set d = asset_deprs[asset.id] %}
+                <tr id="row-{{ asset.id }}"
+                    class="{% if not loop.index % 2 %}table-light{% endif %}">
+
+                  {# Checkbox #}
+                  <td class="ps-3 align-middle">
+                    <input class="form-check-input asset-check" type="checkbox"
+                           name="asset_ids" value="{{ asset.id }}" checked>
+                  </td>
+
+                  {# Nombre del activo #}
+                  <td class="align-middle">
+                    <div class="fw-semibold">{{ asset.name }}</div>
+                    <div class="text-muted" style="font-size:11px;">
+                      <span class="asset-tag-badge me-1">{{ asset.asset_tag }}</span>
+                      {% if asset.serial_number %}
+                      <span class="font-monospace">S/N {{ asset.serial_number }}</span>
+                      {% endif %}
+                    </div>
+                    {% if asset.brand or asset.model %}
+                    <div class="text-muted" style="font-size:11px;">
+                      {% if asset.brand %}{{ asset.brand.name }}{% endif %}
+                      {% if asset.model %} / {{ asset.model }}{% endif %}
+                    </div>
+                    {% endif %}
+                  </td>
+
+                  {# Costo original #}
+                  <td class="align-middle text-end">
+                    {% if asset.purchase_cost %}
+                    <span class="fw-semibold">${{ '{:,.2f}'.format(asset.purchase_cost) }}</span>
+                    {% if asset.purchase_date %}
+                    <div class="text-muted" style="font-size:10px;">
+                      {{ asset.purchase_date.strftime('%d/%m/%Y') }}
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  {# Antigüedad #}
+                  <td class="align-middle text-center">
+                    {% if asset.purchase_date %}
+                    <span id="years-{{ asset.id }}">{{ '%.1f'|format(d.years) }}</span> años
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  {# Depreciación acumulada #}
+                  <td class="align-middle text-center">
+                    {% if asset.purchase_cost and asset.purchase_date %}
+                    <span id="deprt-{{ asset.id }}" class="fw-semibold
+                      {% if d.depr_pct >= 100 %}text-secondary
+                      {% elif d.depr_pct >= 70 %}text-warning
+                      {% else %}text-muted{% endif %}">
+                      {{ '%.0f'|format(d.depr_pct) }}%
+                    </span>
+                    <div class="progress mt-1" style="height:3px;">
+                      <div class="progress-bar
+                        {% if d.depr_pct >= 100 %}bg-secondary
+                        {% elif d.depr_pct >= 70 %}bg-warning
+                        {% else %}bg-success{% endif %}"
+                        id="deprbar-{{ asset.id }}"
+                        style="width:{{ [d.depr_pct, 100]|min }}%"></div>
+                    </div>
+                    <div class="text-muted" style="font-size:10px;">Tasa: {{ (d.rate*100)|int }}% anual</div>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  {# Valor actual #}
+                  <td class="align-middle text-end">
+                    {% if asset.purchase_cost and asset.purchase_date %}
+                    <span id="curval-{{ asset.id }}" class="fw-bold
+                      {% if d.fully_depr %}text-muted
+                      {% else %}text-success{% endif %}"
+                      style="font-size:13px;">
+                      ${{ '{:,.2f}'.format(d.current_value) }}
+                    </span>
+                    {% if d.fully_depr %}
+                    <div style="font-size:10px;color:#888;">Totalmente depreciado</div>
+                    {% endif %}
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  {# Condición #}
+                  <td class="align-middle">
+                    <select name="cond_{{ asset.id }}" class="form-select form-select-sm cond-select"
+                            data-asset="{{ asset.id }}" onchange="toggleDamage(this)">
+                      <option value="bueno" selected>✅ Buen estado</option>
+                      <option value="dano">⚠️ Con daño / avería</option>
+                    </select>
+                    <div id="dmg-field-{{ asset.id }}" style="display:none;" class="mt-1">
+                      <input type="text" name="dmg_{{ asset.id }}"
+                             class="form-control form-control-sm"
+                             placeholder="Describe el daño observado…"
+                             maxlength="120">
+                    </div>
+                  </td>
+
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {# Footer con totales dinámicos #}
+        <div class="card-footer bg-light">
+          <div class="row g-2 align-items-center" style="font-size:13px;">
+            <div class="col-md-3">
+              <span class="text-muted">Costo Original Total:</span>
+              <span class="fw-bold ms-1" id="total-orig">
+                ${{ '{:,.2f}'.format(assets | selectattr('purchase_cost') | map(attribute='purchase_cost') | sum) }}
+              </span>
+            </div>
+            <div class="col-md-3">
+              <span class="text-muted">Valor Actual Total:</span>
+              <span class="fw-bold ms-1 text-success" id="total-current">
+                {% set cv = namespace(sum=0) %}
+                {% for a in assets %}{% if a.purchase_cost and a.purchase_date %}{% set cv.sum = cv.sum + asset_deprs[a.id].current_value %}{% endif %}{% endfor %}
+                ${{ '{:,.2f}'.format(cv.sum) }}
+              </span>
+            </div>
+            <div class="col-md-3">
+              <span class="text-muted">Responsabilidad por daños:</span>
+              <span class="fw-bold ms-1 text-danger" id="total-damage">$0.00</span>
+            </div>
+            <div class="col-md-3 text-end">
+              <span class="text-muted" style="font-size:11px;">
+                <i class="bi bi-info-circle me-1"></i>Depreciación en línea recta (LISR Art. 40)
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ── Aviso legal ── #}
+      <div class="alert alert-warning d-flex gap-2 py-2 mb-3" style="font-size:12.5px;">
+        <i class="bi bi-exclamation-triangle-fill mt-1 flex-shrink-0"></i>
+        <div>
+          <strong>Importante:</strong>
+          El valor de responsabilidad por daños corresponde al <strong>valor en libros</strong>
+          del activo a la fecha de baja, calculado con la tasa SAT del artículo 40 de la LISR.
+          Si el activo está totalmente depreciado, el valor en libros es <strong>$0.00</strong>
+          — sin embargo, puede acordarse el costo de reparación real como política interna.
+        </div>
+      </div>
+
+      {# ── Botones ── #}
+      <div class="d-flex gap-2 justify-content-end mb-4">
+        <a href="{{ url_for('employees_list') }}" class="btn btn-outline-secondary">
+          Cancelar
+        </a>
+        <button type="submit" id="btn-generate"
+                class="btn"
+                style="background:#1A3C34;color:#fff;border-color:#1A3C34;">
+          <i class="bi bi-file-earmark-pdf-fill me-1"></i>
+          Generar Acta de Entrega-Recepción
+        </button>
+      </div>
+
+    </form>
+
+    {% else %}
+    {# Sin activos #}
+    <div class="card">
+      <div class="card-body text-center py-5">
+        <i class="bi bi-inbox text-muted d-block mb-2" style="font-size:2.5rem;"></i>
+        <div class="fw-semibold text-muted mb-1">Sin activos asignados</div>
+        <div class="text-muted mb-3" style="font-size:13px;">
+          Este colaborador no tiene equipos asignados actualmente.
+          No es necesario generar un acta de entrega.
+        </div>
+        <a href="{{ url_for('employees_list') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-arrow-left me-1"></i>Volver a empleados
+        </a>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Datos base de depreciación (precalculados del servidor) ──────────────────
+const ASSET_DATA = {
+  {% for asset in assets %}
+  {{ asset.id }}: {
+    orig:     {{ asset.purchase_cost or 0 }},
+    purchaseDate: {{ ('"%s"' % asset.purchase_date.isoformat()) if asset.purchase_date else 'null' }},
+    rate:     {{ asset_deprs[asset.id].rate }},
+    currVal:  {{ asset_deprs[asset.id].current_value }},
+    years:    {{ asset_deprs[asset.id].years }},
+    deprPct:  {{ asset_deprs[asset.id].depr_pct }},
+  },
+  {% endfor %}
+};
+
+// ── Recalcula depreciación cuando cambia la fecha ───────────────────────────
+function recalcDepreciation() {
+  const dateInput = document.getElementById('offboarding-date').value;
+  const asOf = dateInput ? new Date(dateInput + 'T00:00:00') : new Date();
+
+  Object.entries(ASSET_DATA).forEach(([aid, d]) => {
+    if (!d.purchaseDate || !d.orig) return;
+    const purchase = new Date(d.purchaseDate + 'T00:00:00');
+    const years    = (asOf - purchase) / (365.25 * 24 * 3600 * 1000);
+    const deprPct  = Math.min(d.rate * years * 100, 100);
+    const currVal  = Math.max(0, d.orig * (1 - d.rate * years));
+
+    // Actualizar DOM
+    const yearsEl = document.getElementById(`years-${aid}`);
+    if (yearsEl) yearsEl.textContent = years.toFixed(1);
+
+    const deprEl = document.getElementById(`deprt-${aid}`);
+    if (deprEl) deprEl.textContent = deprPct.toFixed(0) + '%';
+
+    const barEl = document.getElementById(`deprbar-${aid}`);
+    if (barEl) barEl.style.width = Math.min(deprPct, 100) + '%';
+
+    const valEl = document.getElementById(`curval-${aid}`);
+    if (valEl) valEl.textContent = '$' + currVal.toLocaleString('es-MX',
+      {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    // Guardar valor actualizado para el total
+    ASSET_DATA[aid]._currVal = currVal;
+    ASSET_DATA[aid]._years   = years;
+    ASSET_DATA[aid]._deprPct = deprPct;
+  });
+
+  updateTotals();
+}
+
+// ── Toggle campo de daño ─────────────────────────────────────────────────────
+function toggleDamage(sel) {
+  const aid = sel.dataset.asset;
+  const field = document.getElementById(`dmg-field-${aid}`);
+  if (field) {
+    field.style.display = sel.value === 'dano' ? 'block' : 'none';
+  }
+  updateTotals();
+}
+
+// ── Totales dinámicos ────────────────────────────────────────────────────────
+function updateTotals() {
+  let totalOrig = 0, totalCurr = 0, totalDmg = 0;
+
+  document.querySelectorAll('.asset-check').forEach(cb => {
+    if (!cb.checked) return;
+    const aid  = parseInt(cb.value);
+    const d    = ASSET_DATA[aid];
+    if (!d) return;
+    const curr = d._currVal !== undefined ? d._currVal : d.currVal;
+    totalOrig += d.orig || 0;
+    totalCurr += curr;
+
+    const condSel = document.querySelector(`[name="cond_${aid}"]`);
+    if (condSel && condSel.value === 'dano') {
+      totalDmg += curr;
+    }
+  });
+
+  const fmt = v => '$' + v.toLocaleString('es-MX',
+    {minimumFractionDigits:2, maximumFractionDigits:2});
+
+  document.getElementById('total-orig').textContent    = fmt(totalOrig);
+  document.getElementById('total-current').textContent = fmt(totalCurr);
+  document.getElementById('total-damage').textContent  = fmt(totalDmg);
+
+  // Color para daños
+  const dmgEl = document.getElementById('total-damage');
+  dmgEl.style.color = totalDmg > 0 ? '#dc3545' : '#198754';
+}
+
+// ── Seleccionar todos ────────────────────────────────────────────────────────
+const selectAll = document.getElementById('selectAll');
+const assetChecks = document.querySelectorAll('.asset-check');
+const btnGenerate = document.getElementById('btn-generate');
+
+if (selectAll) {
+  selectAll.addEventListener('change', () => {
+    assetChecks.forEach(cb => cb.checked = selectAll.checked);
+    updateTotals();
+  });
+}
+assetChecks.forEach(cb => {
+  cb.addEventListener('change', () => {
+    selectAll.checked = [...assetChecks].every(c => c.checked);
+    const any = [...assetChecks].some(c => c.checked);
+    if (btnGenerate) btnGenerate.disabled = !any;
+    updateTotals();
+  });
+});
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+updateTotals();
+</script>
+{% endblock %}

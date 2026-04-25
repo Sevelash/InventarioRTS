@@ -21,6 +21,12 @@
     <i class="bi bi-arrow-right-circle me-1"></i>Asignar
   </a>
   {% endif %}
+  {% if asset.status != 'retired' and asset.status != 'disposed' %}
+  <a href="{{ url_for('maintenance_new', asset_id=asset.id) }}"
+     class="btn btn-sm btn-warning text-dark">
+    <i class="bi bi-wrench-adjustable me-1"></i>Mantenimiento
+  </a>
+  {% endif %}
   {% if asset.location_type in ('foraneo', 'hibrido') %}
   <a href="{{ url_for('shipment_new', asset_id=asset.id) }}" class="btn btn-sm btn-navy">
     <i class="bi bi-truck me-1"></i>Nuevo Envío
@@ -327,6 +333,133 @@
     </div>
     {% endif %}
 
+    <!-- ── Absolute ─────────────────────────────────────────── -->
+    {% if asset.asset_type in ('laptop', 'desktop', 'tablet') %}
+    {% set abs_configured = absolute_configured %}
+    <div class="card mb-3" id="absolute-card"
+         style="border-left:4px solid {% if asset.absolute_id %}{% if asset.absolute_status == 'Active' %}#198754{% elif asset.absolute_status == 'Stolen' %}#dc3545{% else %}#6c757d{% endif %}{% else %}#dee2e6{% endif %};">
+
+      <div class="card-header d-flex align-items-center justify-content-between"
+           style="background:{% if asset.absolute_id %}rgba(232,92,43,.05){% else %}#f8f9fa{% endif %};">
+        <span>
+          <i class="bi bi-shield-lock me-1" style="color:#e85c2b;"></i>
+          <strong style="font-size:13px;">Absolute</strong>
+          {% if asset.absolute_id %}
+          <span class="badge ms-1"
+                style="background:{% if asset.absolute_status == 'Active' %}#198754{% elif asset.absolute_status == 'Stolen' %}#dc3545{% elif asset.absolute_status == 'Inactive' %}#6c757d{% else %}#ffc107{% endif %};font-size:10px;">
+            {{ asset.absolute_status or '?' }}
+          </span>
+          {% endif %}
+        </span>
+        {% if asset.absolute_id %}
+        <div class="d-flex gap-1">
+          <form action="{{ url_for('asset_absolute_sync', id=asset.id) }}" method="post" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Sincronizar con Absolute">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </form>
+          <a href="https://cc.absolute.com" target="_blank"
+             class="btn btn-sm py-0 px-2"
+             style="background:#e85c2b;color:#fff;border-color:#e85c2b;" title="Abrir Absolute Console">
+            <i class="bi bi-box-arrow-up-right"></i>
+          </a>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="card-body" style="font-size:13px;">
+        {% if asset.absolute_id %}
+          {# ─── Ligado ─── #}
+          <div class="row g-2 mb-2">
+            {% if asset.absolute_username %}
+            <div class="col-12">
+              <div class="fw-semibold" style="font-size:11px;color:#888;">ÚLTIMO USUARIO</div>
+              <div><i class="bi bi-person me-1 text-muted"></i>{{ asset.absolute_username }}</div>
+            </div>
+            {% endif %}
+            {% if asset.absolute_last_seen %}
+            <div class="col-12">
+              <div class="fw-semibold" style="font-size:11px;color:#888;">ÚLTIMA CONEXIÓN</div>
+              <div>{{ asset.absolute_last_seen.strftime('%d/%m/%Y %H:%M') }} UTC</div>
+            </div>
+            {% endif %}
+            <div class="col-12">
+              <div class="fw-semibold" style="font-size:11px;color:#888;">DEVICE ID</div>
+              <div class="font-monospace" style="font-size:10px;word-break:break-all;color:#888;">
+                {{ asset.absolute_id }}
+              </div>
+            </div>
+            {% if asset.absolute_sync_at %}
+            <div class="col-12">
+              <div class="text-muted" style="font-size:11px;">
+                Sync: {{ asset.absolute_sync_at.strftime('%d/%m/%Y %H:%M') }}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+          <form action="{{ url_for('asset_absolute_unlink', id=asset.id) }}" method="post"
+                onsubmit="return confirm('¿Desvincular de Absolute?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-danger btn-sm w-100 py-0">
+              <i class="bi bi-unlink me-1"></i>Desvincular
+            </button>
+          </form>
+
+        {% elif abs_configured %}
+          {# ─── No ligado, pero configurado ─── #}
+          <div class="text-center text-muted mb-3" style="font-size:12px;">
+            <i class="bi bi-shield-slash d-block mb-1 opacity-25 fs-3"></i>
+            No ligado a Absolute aún.
+          </div>
+
+          {# Búsqueda automática por serial #}
+          {% if asset.serial_number %}
+          <button class="btn btn-sm w-100 mb-2"
+                  style="background:#e85c2b;color:#fff;border-color:#e85c2b;"
+                  onclick="searchAbsolute()" id="abs-search-btn">
+            <i class="bi bi-search me-1"></i>Buscar por serial {{ asset.serial_number }}
+          </button>
+          {% else %}
+          <div class="alert alert-warning py-1 mb-2" style="font-size:11px;">
+            Este activo no tiene número de serie registrado. Agrégalo en Editar para buscar automáticamente.
+          </div>
+          {% endif %}
+
+          {# Resultados de búsqueda #}
+          <div id="abs-results" style="display:none;"></div>
+
+          {# Ligar manualmente por UID #}
+          <div class="mt-2">
+            <details>
+              <summary style="font-size:12px;cursor:pointer;color:#888;">
+                Ligar manualmente por Device ID
+              </summary>
+              <form action="{{ url_for('asset_absolute_link', id=asset.id) }}" method="post" class="mt-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="text" name="device_id" class="form-control form-control-sm font-monospace mb-2"
+                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required>
+                <button type="submit" class="btn btn-primary btn-sm w-100">
+                  <i class="bi bi-link-45deg me-1"></i>Ligar
+                </button>
+              </form>
+            </details>
+          </div>
+
+        {% else %}
+          {# ─── No configurado ─── #}
+          <div class="text-center" style="font-size:12px;color:#888;">
+            <i class="bi bi-shield-slash d-block mb-1 opacity-25 fs-3"></i>
+            Absolute no está configurado.<br>
+            <a href="{{ url_for('setup_absolute') }}" class="mt-1 d-inline-block">
+              Configurar en Setup →
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Meta -->
     <div class="card">
       <div class="card-header"><i class="bi bi-info-circle me-2"></i>Información</div>
@@ -393,4 +526,131 @@
 </div>
 {% endif %}
 
+{# ── Historial de Mantenimiento ── #}
+{% if asset.maintenance_records %}
+<div class="card mt-3">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-wrench-adjustable me-2"></i>Historial de Mantenimiento</span>
+    <a href="{{ url_for('maintenance_new', asset_id=asset.id) }}" class="btn btn-warning btn-sm text-dark">
+      <i class="bi bi-plus-lg me-1"></i>Nuevo Ticket
+    </a>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0" style="font-size:13px;">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">Folio</th>
+            <th>Tipo</th>
+            <th>Estado</th>
+            <th>Fecha</th>
+            <th>Descripción</th>
+            <th class="pe-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in asset.maintenance_records | sort(attribute='created_at', reverse=True) %}
+          <tr>
+            <td class="ps-3 fw-semibold">{{ m.ticket_folio }}</td>
+            <td><span class="badge bg-{{ m.type_color }}">{{ m.type_label }}</span></td>
+            <td><span class="badge bg-{{ m.status_color }}">{{ m.status_label }}</span></td>
+            <td>{{ m.reported_date | format_date if m.reported_date else '—' }}</td>
+            <td class="text-truncate" style="max-width:200px;">{{ m.description or '—' }}</td>
+            <td class="pe-3 text-end">
+              <a href="{{ url_for('maintenance_detail', id=m.id) }}"
+                 class="btn btn-sm btn-outline-primary py-0 px-2">
+                <i class="bi bi-eye"></i>
+              </a>
+              <a href="{{ url_for('maintenance_pdf', id=m.id) }}"
+                 class="btn btn-sm btn-outline-danger py-0 px-2">
+                <i class="bi bi-file-earmark-pdf"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── Absolute: buscar por serial ── */
+function searchAbsolute() {
+  const btn = document.getElementById('abs-search-btn');
+  const res = document.getElementById('abs-results');
+  if (!btn || !res) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Buscando…';
+  res.style.display = 'none';
+  res.innerHTML = '';
+
+  const form = new FormData();
+  form.append('csrf_token', document.querySelector('[name=csrf_token]').value);
+
+  fetch('{{ url_for("asset_absolute_search", id=asset.id) }}', {
+    method: 'POST',
+    body: form,
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-search me-1"></i>Buscar por serial {{ asset.serial_number }}';
+
+    if (data.error) {
+      res.style.display = 'block';
+      res.innerHTML = `<div class="alert alert-danger py-2 mb-2" style="font-size:12px;">
+        <i class="bi bi-x-circle me-1"></i>${data.error}</div>`;
+      return;
+    }
+
+    if (!data.results || !data.results.length) {
+      res.style.display = 'block';
+      res.innerHTML = `<div class="alert alert-warning py-2 mb-2" style="font-size:12px;">
+        <i class="bi bi-search me-1"></i>
+        No se encontró ningún dispositivo con ese serial en Absolute.
+        Verifica que el agente esté instalado y activado.</div>`;
+      return;
+    }
+
+    const STATUS_COLORS = {Active:'#198754', Inactive:'#6c757d', Stolen:'#dc3545'};
+    let html = '<div class="mb-2" style="font-size:12px;color:#888;">Selecciona el dispositivo a ligar:</div>';
+    data.results.forEach(d => {
+      const color = STATUS_COLORS[d.status] || '#6c757d';
+      const lastSeen = d.last_seen ? `<div style="font-size:10px;color:#aaa;">Último: ${d.last_seen}</div>` : '';
+      const user = d.username ? `<div style="font-size:11px;color:#666;"><i class="bi bi-person" style="font-size:10px;"></i> ${d.username}</div>` : '';
+      html += `
+        <div class="border rounded p-2 mb-2 d-flex justify-content-between align-items-start"
+             style="font-size:12px;">
+          <div>
+            <div class="fw-semibold">${d.name || d.id}</div>
+            <div style="color:#888;">S/N: ${d.serial || '—'}</div>
+            ${user}${lastSeen}
+          </div>
+          <form action="{{ url_for('asset_absolute_link', id=asset.id) }}" method="post" class="ms-2 flex-shrink-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="device_id" value="${d.id}">
+            <button type="submit" class="btn btn-sm py-0 px-2"
+                    style="background:${color};color:#fff;border-color:${color};">
+              <i class="bi bi-link-45deg me-1"></i>Ligar
+            </button>
+          </form>
+        </div>`;
+    });
+    res.style.display = 'block';
+    res.innerHTML = html;
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-search me-1"></i>Buscar por serial {{ asset.serial_number }}';
+    res.style.display = 'block';
+    res.innerHTML = `<div class="alert alert-danger py-2" style="font-size:12px;">Error de red: ${err}</div>`;
+  });
+}
+</script>
 {% endblock %}

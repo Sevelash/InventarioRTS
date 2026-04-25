@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+{% from "_macros.html" import breadcrumbs %}
+
+{% block title %}{{ record.name }} — Licencias{% endblock %}
+{% block page_title %}Licencia de Software{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('license_edit', id=record.id) }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-pencil me-1"></i>Editar
+  </a>
+  <a href="{{ url_for('license_list') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+{% endblock %}
+
+{% block content %}
+{{ breadcrumbs([
+  ('Inventory', url_for('inventory_dashboard')),
+  ('Licencias', url_for('license_list')),
+  (record.name, none)
+]) }}
+
+<div class="row g-3">
+
+  {# ── Col principal ── #}
+  <div class="col-lg-8">
+
+    {# Header card #}
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+          <div>
+            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+              {% if record.is_microsoft %}
+              <i class="bi bi-microsoft fs-5 text-primary"></i>
+              {% endif %}
+              <span class="fw-bold fs-5">{{ record.name }}</span>
+              <span class="badge bg-secondary">{{ record.type_label }}</span>
+              <span class="badge bg-{{ record.status_color }}">{{ record.status_label }}</span>
+            </div>
+            {% if record.vendor %}
+            <div class="text-muted" style="font-size:13px;">
+              <i class="bi bi-building me-1"></i>{{ record.vendor }}
+              {% if record.software and record.software != record.name %}
+              · {{ record.software }}
+              {% endif %}
+            </div>
+            {% endif %}
+            {% if record.category %}
+            <div class="text-muted mt-1" style="font-size:12px;">
+              <i class="bi bi-tag me-1"></i>{{ record.category_label }}
+            </div>
+            {% endif %}
+          </div>
+
+          {# Contador de asientos #}
+          {% if record.seat_count %}
+          <div class="text-center flex-shrink-0">
+            {% set pct = (record.used_seats / record.seat_count * 100)|int %}
+            <div class="fw-bold fs-4 {% if record.available_seats == 0 %}text-danger{% elif pct >= 80 %}text-warning{% else %}text-success{% endif %}">
+              {{ record.used_seats }}<span class="text-muted fs-6">/{{ record.seat_count }}</span>
+            </div>
+            <div class="text-muted" style="font-size:11px;">asientos usados</div>
+            <div class="progress mt-1" style="height:4px;width:80px;">
+              <div class="progress-bar {% if pct >= 100 %}bg-danger{% elif pct >= 80 %}bg-warning{% else %}bg-success{% endif %}"
+                   style="width:{{ [pct,100]|min }}%"></div>
+            </div>
+          </div>
+          {% elif record.used_seats %}
+          <div class="text-center flex-shrink-0">
+            <div class="fw-bold fs-4 text-muted">{{ record.used_seats }}</div>
+            <div class="text-muted" style="font-size:11px;">asignaciones</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# Tenant Microsoft #}
+    {% if record.is_microsoft %}
+    <div class="card mb-3" style="border-left:4px solid #0078d4;">
+      <div class="card-header" style="background:rgba(0,120,212,.06);">
+        <i class="bi bi-microsoft me-2 text-primary"></i>Microsoft 365 / Azure Tenant
+      </div>
+      <div class="card-body" style="font-size:13px;">
+        <div class="row g-3">
+          {% if record.tenant_name %}
+          <div class="col-md-6">
+            <div class="fw-semibold" style="font-size:11px;color:#888;">ORGANIZACIÓN</div>
+            <div>{{ record.tenant_name }}</div>
+          </div>
+          {% endif %}
+          {% if record.tenant_domain %}
+          <div class="col-md-6">
+            <div class="fw-semibold" style="font-size:11px;color:#888;">DOMINIO DEL TENANT</div>
+            <div class="font-monospace">{{ record.tenant_domain }}</div>
+          </div>
+          {% endif %}
+          {% if record.tenant_id %}
+          <div class="col-md-6">
+            <div class="fw-semibold" style="font-size:11px;color:#888;">TENANT ID (DIRECTORY ID)</div>
+            <div class="font-monospace" style="font-size:11px;word-break:break-all;">{{ record.tenant_id }}</div>
+          </div>
+          {% endif %}
+          {% if record.subscription_id %}
+          <div class="col-md-6">
+            <div class="fw-semibold" style="font-size:11px;color:#888;">SUBSCRIPTION ID</div>
+            <div class="font-monospace" style="font-size:11px;word-break:break-all;">{{ record.subscription_id }}</div>
+          </div>
+          {% endif %}
+          {% if record.sku_name %}
+          <div class="col-md-6">
+            <div class="fw-semibold" style="font-size:11px;color:#888;">SKU / PLAN</div>
+            <div class="font-monospace">{{ record.sku_name }}</div>
+          </div>
+          {% endif %}
+        </div>
+        <div class="mt-3 d-flex flex-wrap gap-2">
+          <a href="https://admin.microsoft.com" target="_blank"
+             class="btn btn-sm" style="background:#0078d4;color:#fff;border-color:#0078d4;">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Admin Center
+          </a>
+          {% if record.tenant_domain %}
+          <a href="https://portal.azure.com/#blade/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/Overview"
+             target="_blank" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-cloud me-1"></i>Azure Portal
+          </a>
+          <a href="https://admin.microsoft.com/#/subscriptions"
+             target="_blank" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-receipt me-1"></i>Suscripciones
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Asignaciones #}
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-people me-2"></i>Asignaciones
+          <span class="badge bg-secondary ms-1">{{ record.assignments|length }}</span>
+          {% if record.seat_count %}
+          <span class="text-muted" style="font-size:12px;">
+            / {{ record.seat_count }} asientos
+          </span>
+          {% endif %}
+        </span>
+      </div>
+
+      {# Tabla de asignaciones actuales #}
+      {% if record.assignments %}
+      <div class="table-responsive">
+        <table class="table table-sm mb-0" style="font-size:13px;">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Asignado a</th>
+              <th>Tipo</th>
+              <th>Fecha</th>
+              <th>Notas</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for asn in record.assignments %}
+            <tr>
+              <td class="ps-3">
+                {% if asn.employee %}
+                <i class="bi bi-person me-1 text-muted"></i>
+                <a href="{{ url_for('employee_edit', id=asn.employee_id) }}" class="text-decoration-none">
+                  {{ asn.employee.name }}
+                </a>
+                {% if asn.employee.department %}
+                <div class="text-muted" style="font-size:11px;">{{ asn.employee.department }}</div>
+                {% endif %}
+                {% elif asn.asset %}
+                <i class="bi bi-laptop me-1 text-muted"></i>
+                <a href="{{ url_for('asset_detail', id=asn.asset_id) }}" class="text-decoration-none">
+                  {{ asn.asset.name }}
+                </a>
+                <span class="ms-1 asset-tag-badge" style="font-size:11px;">{{ asn.asset.asset_tag }}</span>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if asn.employee %}
+                <span class="badge bg-primary" style="font-size:10px;">Empleado</span>
+                {% elif asn.asset %}
+                <span class="badge bg-info text-dark" style="font-size:10px;">Activo</span>
+                {% endif %}
+              </td>
+              <td class="text-muted">
+                {{ asn.assigned_date | format_date if asn.assigned_date else '—' }}
+              </td>
+              <td class="text-muted">{{ asn.notes or '—' }}</td>
+              <td class="text-end pe-3">
+                <form action="{{ url_for('license_unassign', id=record.id, aid=asn.id) }}"
+                      method="post" class="d-inline"
+                      onsubmit="return confirm('¿Remover esta asignación?')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-outline-danger btn-sm py-0 px-2">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body py-3 text-center text-muted" style="font-size:13px;">
+        <i class="bi bi-person-x d-block mb-1 opacity-25 fs-3"></i>
+        Sin asignaciones aún.
+      </div>
+      {% endif %}
+
+      {# Formulario nueva asignación #}
+      {% if record.seat_count is none or record.available_seats > 0 %}
+      <div class="card-footer bg-light">
+        <div class="fw-semibold mb-2" style="font-size:12.5px;">
+          <i class="bi bi-plus-circle me-1 text-primary"></i>Nueva Asignación
+          {% if record.seat_count %}
+          <span class="text-muted fw-normal">({{ record.available_seats }} disponibles)</span>
+          {% endif %}
+        </div>
+        <form action="{{ url_for('license_assign', id=record.id) }}" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" style="font-size:12px;">Empleado</label>
+              <select name="employee_id" class="form-select form-select-sm">
+                <option value="">— Seleccionar —</option>
+                {% for emp in employees %}
+                <option value="{{ emp.id }}">{{ emp.name }}
+                  {% if emp.department %} ({{ emp.department }}){% endif %}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-1 text-center text-muted" style="font-size:12px;padding-bottom:6px;">ó</div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" style="font-size:12px;">Activo</label>
+              <select name="asset_id" class="form-select form-select-sm">
+                <option value="">— Seleccionar —</option>
+                {% for a in assets %}
+                <option value="{{ a.id }}">{{ a.name }} — {{ a.asset_tag }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label fw-semibold" style="font-size:12px;">Fecha</label>
+              <input type="date" name="assigned_date" class="form-control form-control-sm"
+                     value="{{ today.isoformat() }}">
+            </div>
+            <div class="col-12">
+              <input type="text" name="notes" class="form-control form-control-sm"
+                     placeholder="Notas (opcional)…">
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-lg me-1"></i>Asignar
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+      {% else %}
+      <div class="card-footer bg-danger bg-opacity-10 text-danger" style="font-size:12px;">
+        <i class="bi bi-exclamation-circle me-1"></i>
+        No hay asientos disponibles. Edita la licencia para aumentar el número de asientos.
+      </div>
+      {% endif %}
+    </div>
+
+    {# Notas #}
+    {% if record.notes %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-sticky me-2"></i>Notas</div>
+      <div class="card-body"><p class="mb-0" style="white-space:pre-wrap;">{{ record.notes }}</p></div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# ── Col derecha ── #}
+  <div class="col-lg-4">
+
+    {# Info financiera y fechas #}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-calendar3 me-2"></i>Fechas y Costos</div>
+      <div class="card-body" style="font-size:13px;">
+        {% if record.purchase_date %}
+        <div class="mb-2">
+          <div class="fw-semibold" style="font-size:11px;color:#888;">FECHA DE COMPRA</div>
+          <div>{{ record.purchase_date | format_date }}</div>
+        </div>
+        {% endif %}
+        {% if record.expiry_date %}
+        <div class="mb-2">
+          <div class="fw-semibold" style="font-size:11px;color:#888;">VENCIMIENTO</div>
+          {% set days = record.days_until_expiry %}
+          <div class="{% if days is not none and days < 0 %}text-danger{% elif days is not none and days <= 30 %}text-warning fw-semibold{% endif %}">
+            {{ record.expiry_date | format_date }}
+          </div>
+          {% if days is not none %}
+          <div style="font-size:11px;{% if days < 0 %}color:#dc3545;{% elif days <= 30 %}color:#f0a500;{% else %}color:#888;{% endif %}">
+            {% if days < 0 %}Vencida hace {{ days|abs }} días
+            {% elif days == 0 %}Vence hoy
+            {% else %}{{ days }} días restantes
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% if record.renewal_date %}
+        <div class="mb-2">
+          <div class="fw-semibold" style="font-size:11px;color:#888;">RENOVACIÓN</div>
+          <div>{{ record.renewal_date | format_date }}</div>
+        </div>
+        {% endif %}
+        {% if record.purchase_cost %}
+        <hr class="my-2">
+        <div class="mb-2">
+          <div class="fw-semibold" style="font-size:11px;color:#888;">COSTO DE COMPRA</div>
+          <div>{{ record.currency }} {{ '{:,.2f}'.format(record.purchase_cost) }}</div>
+        </div>
+        {% endif %}
+        {% if record.renewal_cost %}
+        <div class="mb-0">
+          <div class="fw-semibold" style="font-size:11px;color:#888;">COSTO DE RENOVACIÓN</div>
+          <div>{{ record.currency }} {{ '{:,.2f}'.format(record.renewal_cost) }}</div>
+        </div>
+        {% endif %}
+        {% if not record.purchase_date and not record.expiry_date and not record.purchase_cost %}
+        <div class="text-muted">—</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Clave de licencia #}
+    {% if record.license_key and not record.is_microsoft %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-upc-scan me-2"></i>Clave de Licencia</div>
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-2">
+          <code id="license-key-display" class="flex-grow-1 p-2 bg-light rounded"
+                style="font-size:12px;word-break:break-all;filter:blur(4px);cursor:pointer;"
+                onclick="this.style.filter='none'">
+            {{ record.license_key }}
+          </code>
+          <button class="btn btn-outline-secondary btn-sm py-0 px-2"
+                  onclick="navigator.clipboard.writeText('{{ record.license_key }}');this.innerHTML='<i class=\'bi bi-check-lg\'></i>'">
+            <i class="bi bi-clipboard"></i>
+          </button>
+        </div>
+        <div class="form-text">Clic para revelar · botón para copiar</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Eliminar (admin) #}
+    {% if current_user and current_user.role == 'admin' %}
+    <div class="card border-danger">
+      <div class="card-body py-2">
+        <form action="{{ url_for('license_delete', id=record.id) }}" method="post"
+              onsubmit="return confirm('¿Eliminar permanentemente la licencia {{ record.name }}? Se perderán todas las asignaciones.')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-outline-danger btn-sm w-100">
+            <i class="bi bi-trash me-1"></i>Eliminar Licencia
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
