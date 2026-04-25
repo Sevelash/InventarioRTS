@@ -474,7 +474,7 @@ def task_status(id, task_id):
 def task_edit(id, task_id):
     task        = Task.query.get_or_404(task_id)
     old_assigned = task.assigned_to_id
-    new_assigned = request.form.get('assigned_to_id') or None
+    new_assigned = request.form.get('assigned_to_id', type=int) or None
 
     task.title          = request.form.get('title', '').strip()
     task.description    = request.form.get('description', '').strip() or None
@@ -490,7 +490,7 @@ def task_edit(id, task_id):
     db.session.commit()
 
     by_name = _current_user().get('name', 'Someone')
-    if new_assigned and new_assigned != str(old_assigned):
+    if new_assigned and new_assigned != old_assigned:
         assignee = User.query.get(new_assigned)
         project  = Project.query.get(id)
         if assignee and project:

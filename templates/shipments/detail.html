@@ -341,7 +341,7 @@ async function trackNow(id) {
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Rastreando…';
 
   try {
-    const r = await fetch(`/shipments/${id}/track`, { method: 'POST' });
+    const r = await csrfFetch(`/shipments/${id}/track`, { method: 'POST' });
     const data = await r.json();
 
     if (data.ok) {

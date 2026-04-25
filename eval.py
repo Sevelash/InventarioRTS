@@ -97,6 +97,13 @@ def new_eval():
             flash('Selecciona evaluado y jefe inmediato.', 'danger')
             return render_template('eval/form.html', users=users, form=request.form, ev=None)
 
+        # Verificar que ambos usuarios existan y estén activos
+        evaluatee = User.query.filter_by(id=evaluatee_id, active=True).first()
+        chief     = User.query.filter_by(id=chief_id, active=True).first()
+        if not evaluatee or not chief:
+            flash('Uno o ambos usuarios no existen o están inactivos.', 'danger')
+            return render_template('eval/form.html', users=users, form=request.form, ev=None)
+
         ev = Evaluation(
             evaluatee_id=evaluatee_id,
             chief_id=chief_id,

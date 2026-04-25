@@ -16,7 +16,11 @@ app = Flask(__name__)
 
 # ── Security: require SECRET_KEY in production ────────────────────────────
 _secret = os.environ.get('SECRET_KEY', '')
+_is_production = os.environ.get('FLASK_ENV') == 'production'
 if not _secret:
+    if _is_production:
+        raise RuntimeError('SECRET_KEY must be set in production. '
+                           'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"')
     import secrets as _secrets
     _secret = _secrets.token_hex(32)
     print('WARNING: SECRET_KEY not set — using a random key (sessions will reset on restart)')
@@ -74,6 +78,20 @@ def _search_col(col, nq):
     if dialect == 'postgresql':
         return db.func.lower(db.func.unaccent(col)).like(f'%{nq}%')
     return db.func.nrm(col).like(f'%{nq}%')
+
+def _month_str(col):
+    """Agrupa por mes YYYY-MM compatible con SQLite y PostgreSQL."""
+    if db.engine.dialect.name == 'postgresql':
+        return db.func.to_char(col, 'YYYY-MM')
+    return db.func.strftime('%Y-%m', col)
+
+def _safe_redirect(url, fallback='assets_list'):
+    """Previene Open Redirect: solo redirige a URLs internas."""
+    from urllib.parse import urlparse
+    parsed = urlparse(url or '')
+    if parsed.scheme or parsed.netloc:
+        return url_for(fallback)
+    return url or url_for(fallback)
 
 # ── Auth blueprint ────────────────────────────────────────────────────────────
 from auth import auth_bp, login_required, module_required, admin_required
@@ -541,14 +559,14 @@ def inventory_dashboard():
     # 1) Adquisiciones por (category_id, YYYY-MM)
     acq_raw = db.session.query(
         Asset.category_id,
-        db.func.strftime('%Y-%m', Asset.created_at),
+        _month_str(Asset.created_at),
         db.func.count(Asset.id)
     ).group_by(Asset.category_id,
-               db.func.strftime('%Y-%m', Asset.created_at)).all()
+               _month_str(Asset.created_at)).all()
 
     # 2) Bajas globales del audit log por YYYY-MM
     baja_raw = db.session.query(
-        db.func.strftime('%Y-%m', AuditLog.created_at),
+        _month_str(AuditLog.created_at),
         db.func.count(AuditLog.id)
     ).filter(
         AuditLog.entity_type == 'asset',
@@ -558,25 +576,25 @@ def inventory_dashboard():
                     db.or_(AuditLog.details.ilike('%→ retired%'),
                            AuditLog.details.ilike('%→ disposed%')))
         )
-    ).group_by(db.func.strftime('%Y-%m', AuditLog.created_at)).all()
+    ).group_by(_month_str(AuditLog.created_at)).all()
 
     # 3) Bajas por categoría (activos retired/disposed, fecha updated_at)
     baja_cat_raw = db.session.query(
         Asset.category_id,
-        db.func.strftime('%Y-%m', Asset.updated_at),
+        _month_str(Asset.updated_at),
         db.func.count(Asset.id)
     ).filter(Asset.status.in_(['retired', 'disposed'])
     ).group_by(Asset.category_id,
-               db.func.strftime('%Y-%m', Asset.updated_at)).all()
+               _month_str(Asset.updated_at)).all()
 
     # 4) Reasignaciones por (category_id, YYYY-MM)
     reas_raw = db.session.query(
         Asset.category_id,
-        db.func.strftime('%Y-%m', Assignment.created_at),
+        _month_str(Assignment.created_at),
         db.func.count(Assignment.id)
     ).join(Asset, Assignment.asset_id == Asset.id
     ).group_by(Asset.category_id,
-               db.func.strftime('%Y-%m', Assignment.created_at)).all()
+               _month_str(Assignment.created_at)).all()
 
     # ── Construir estructura de dicts raw por categoría ───────────────────────
     cat_chart_raw = {
@@ -741,9 +759,9 @@ def asset_new():
     brands          = Brand.query.filter_by(active=True).order_by(Brand.name).all()
     purchase_orders = PurchaseOrder.query.order_by(PurchaseOrder.created_at.desc()).all()
     invoices        = Invoice.query.order_by(Invoice.created_at.desc()).all()
-    return_url      = request.args.get('return_url') or url_for('assets_list')
+    return_url      = _safe_redirect(request.args.get('return_url'), 'assets_list')
     if request.method == 'POST':
-        return_url = request.form.get('return_url') or return_url
+        return_url = _safe_redirect(request.form.get('return_url'), 'assets_list')
         asset_tag  = request.form.get('asset_tag', '').strip()
         if Asset.query.filter_by(asset_tag=asset_tag).first():
             flash(f'El Asset Tag "{asset_tag}" ya existe.', 'danger')
@@ -814,9 +832,9 @@ def asset_edit(id):
     brands          = Brand.query.filter_by(active=True).order_by(Brand.name).all()
     purchase_orders = PurchaseOrder.query.order_by(PurchaseOrder.created_at.desc()).all()
     invoices        = Invoice.query.order_by(Invoice.created_at.desc()).all()
-    return_url      = request.args.get('return_url') or url_for('assets_list')
+    return_url      = _safe_redirect(request.args.get('return_url'), 'assets_list')
     if request.method == 'POST':
-        return_url = request.form.get('return_url') or return_url
+        return_url = _safe_redirect(request.form.get('return_url'), 'assets_list')
         new_tag    = request.form.get('asset_tag', '').strip()
         existing   = Asset.query.filter_by(asset_tag=new_tag).first()
         if existing and existing.id != asset.id:

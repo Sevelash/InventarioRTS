@@ -213,24 +213,30 @@ def notifications():
         action = request.form.get('action', 'save')
 
         if action == 'test_teams':
-            notif.send_teams(
-                'RTS Test Notification',
-                'Teams integration is working correctly from RTS Intranet! 🎉',
-                facts=[('Sent by', session['user']['name']), ('Source', 'Admin Panel')],
-                color='28A745'
-            )
-            flash('Test notification sent to Teams. Check your channel in a moment.', 'info')
+            try:
+                notif.send_teams(
+                    'RTS Test Notification',
+                    'Teams integration is working correctly from RTS Intranet! 🎉',
+                    facts=[('Sent by', session['user']['name']), ('Source', 'Admin Panel')],
+                    color='28A745'
+                )
+                flash('Test notification sent to Teams. Check your channel in a moment.', 'info')
+            except Exception as e:
+                flash(f'Error al enviar a Teams: {e}', 'danger')
             return redirect(url_for('admin.notifications'))
 
         if action == 'test_email':
-            notif.send_email(
-                session['user'].get('email', ''),
-                '[RTS] Test Email Notification',
-                'RTS Email Test',
-                'Email integration is working correctly from RTS Intranet! 🎉',
-                facts=[('Sent by', session['user']['name']), ('Source', 'Admin Panel')],
-            )
-            flash('Test email sent. Check your inbox in a moment.', 'info')
+            try:
+                notif.send_email(
+                    session['user'].get('email', ''),
+                    '[RTS] Test Email Notification',
+                    'RTS Email Test',
+                    'Email integration is working correctly from RTS Intranet! 🎉',
+                    facts=[('Sent by', session['user']['name']), ('Source', 'Admin Panel')],
+                )
+                flash('Test email sent. Check your inbox in a moment.', 'info')
+            except Exception as e:
+                flash(f'Error al enviar email: {e}', 'danger')
             return redirect(url_for('admin.notifications'))
 
         # Save config
@@ -355,11 +361,17 @@ def department_edit(id):
 @admin_required
 def department_delete(id):
     d = Department.query.get_or_404(id)
+    # Verificar dependencias antes de eliminar
+    user_count  = User.query.filter_by(department_id=d.id).count()
+    if user_count > 0:
+        flash(f'No se puede eliminar "{d.name}": tiene {user_count} usuario(s) asignado(s). '
+              f'Reasígnalos primero.', 'danger')
+        return redirect(url_for('admin.departments'))
     name = d.name
     log_action('delete', 'department', entity_id=d.id, entity_name=name)
     db.session.delete(d)
     db.session.commit()
-    flash(f'Department "{name}" deleted.', 'warning')
+    flash(f'Departamento "{name}" eliminado.', 'warning')
     return redirect(url_for('admin.departments'))
 
 
@@ -416,36 +428,42 @@ def access_request_review(id):
                    entity_name=req.user_name,
                    details=f'Approved access to {req.module_slug}')
 
-        # Notify user by email
+        # Notify user by email (non-blocking)
         if user and user.email:
-            mod_name = next((m['name'] for m in ALL_MODULES if m['slug'] == req.module_slug),
-                            req.module_slug)
-            notif.send_email(
-                user.email,
-                f'[RTS] Access approved: {mod_name}',
-                f'Access Granted — {mod_name}',
-                f'Your request to access <b>{mod_name}</b> has been <b>approved</b> by {req.reviewed_by}.',
-                facts=[('Module', mod_name), ('Approved by', req.reviewed_by)],
-                url=notif._url(notif.load_config(), '/')
-            )
+            try:
+                mod_name = next((m['name'] for m in ALL_MODULES if m['slug'] == req.module_slug),
+                                req.module_slug)
+                notif.send_email(
+                    user.email,
+                    f'[RTS] Access approved: {mod_name}',
+                    f'Access Granted — {mod_name}',
+                    f'Your request to access <b>{mod_name}</b> has been <b>approved</b> by {req.reviewed_by}.',
+                    facts=[('Module', mod_name), ('Approved by', req.reviewed_by)],
+                    url=notif._url(notif.load_config(), '/')
+                )
+            except Exception:
+                pass  # No bloquear la aprobación si el email falla
     else:
         log_action('update', 'access_request', entity_id=req.id,
                    entity_name=req.user_name,
                    details=f'Denied access to {req.module_slug}')
-        # Notify user of denial
+        # Notify user of denial (non-blocking)
         user = User.query.get(req.user_id)
         if user and user.email:
-            mod_name = next((m['name'] for m in ALL_MODULES if m['slug'] == req.module_slug),
-                            req.module_slug)
-            notif.send_email(
-                user.email,
-                f'[RTS] Access request update: {mod_name}',
-                f'Access Request Update — {mod_name}',
-                f'Your request to access <b>{mod_name}</b> was reviewed by {req.reviewed_by}.'
-                + (f'<br><br><b>Note:</b> {notes}' if notes else ''),
-                facts=[('Module', mod_name), ('Status', 'Not approved'),
-                       ('Reviewed by', req.reviewed_by)],
-            )
+            try:
+                mod_name = next((m['name'] for m in ALL_MODULES if m['slug'] == req.module_slug),
+                                req.module_slug)
+                notif.send_email(
+                    user.email,
+                    f'[RTS] Access request update: {mod_name}',
+                    f'Access Request Update — {mod_name}',
+                    f'Your request to access <b>{mod_name}</b> was reviewed by {req.reviewed_by}.'
+                    + (f'<br><br><b>Note:</b> {notes}' if notes else ''),
+                    facts=[('Module', mod_name), ('Status', 'Not approved'),
+                           ('Reviewed by', req.reviewed_by)],
+                )
+            except Exception:
+                pass  # No bloquear la negación si el email falla
 
     db.session.commit()
     flash(f'Request {"approved" if action == "approve" else "denied"} for {req.user_name}.', 'success')

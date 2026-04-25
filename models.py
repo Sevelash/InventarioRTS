@@ -40,7 +40,7 @@ class User(db.Model):
     __tablename__ = 'users'
     id             = db.Column(db.Integer, primary_key=True)
     name           = db.Column(db.String(150), nullable=False)
-    username       = db.Column(db.String(80),  nullable=False, unique=True)
+    username       = db.Column(db.String(80),  nullable=False, unique=True, index=True)
     email          = db.Column(db.String(150), unique=True)
     pwd_hash       = db.Column(db.String(256), nullable=False)
     role           = db.Column(db.String(20),  nullable=False, default='viewer')  # admin | viewer
@@ -307,13 +307,13 @@ class Asset(db.Model):
     __tablename__ = 'assets'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
-    asset_tag = db.Column(db.String(50), unique=True, nullable=False)
+    asset_tag = db.Column(db.String(50), unique=True, nullable=False, index=True)
     serial_number = db.Column(db.String(100))
     manufacturer = db.Column(db.String(100))
     model = db.Column(db.String(100))
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
     client_id   = db.Column(db.Integer, db.ForeignKey('clients.id'))
-    status = db.Column(db.String(30), nullable=False, default='available')
+    status = db.Column(db.String(30), nullable=False, default='available', index=True)
     # En Sitio vs Foráneo
     location_type = db.Column(db.String(20), nullable=False, default='en_sitio')  # en_sitio | hibrido | foraneo
     location = db.Column(db.String(150))
@@ -422,7 +422,7 @@ class Assignment(db.Model):
     asset_id = db.Column(db.Integer, db.ForeignKey('assets.id'), nullable=False)
     employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=False)
     assigned_date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
-    returned_date = db.Column(db.Date)
+    returned_date = db.Column(db.Date, index=True)
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -505,7 +505,7 @@ class AuditLog(db.Model):
 class Project(db.Model):
     __tablename__ = 'projects'
     id          = db.Column(db.Integer, primary_key=True)
-    code        = db.Column(db.String(30), unique=True, nullable=False)
+    code        = db.Column(db.String(30), unique=True, nullable=False, index=True)
     name        = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
     client_id   = db.Column(db.Integer, db.ForeignKey('clients.id'))
